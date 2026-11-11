@@ -159,3 +159,20 @@ final class LiveLibraryTests: XCTestCase {
         }
     }
 }
+
+final class CoverTextTests: XCTestCase {
+    func testPartsText() {
+        let first = ["setup_w3_4.04b_(73662).exe"] + (1...5).map { "setup_w3_4.04b_(73662)-\($0).bin" }
+        XCTAssertEqual(CoverBuilder.partsText(first), "installer + parts 1–5")
+        XCTAssertEqual(CoverBuilder.partsText((6...10).map { "setup_w3-\($0).bin" }), "parts 6–10")
+        XCTAssertEqual(CoverBuilder.partsText(["a.zip", "b.zip"]), "2 files")
+    }
+
+    func testShortSummaryEndsCleanly() {
+        let long = String(repeating: "This is a sentence about the game. ", count: 30)
+        let short = CoverBuilder.shortSummary(long)
+        XCTAssertLessThanOrEqual(short.count, 520)
+        XCTAssertTrue(short.hasSuffix("."))
+        XCTAssertEqual(CoverBuilder.shortSummary("One.\n\nTwo."), "One.\n\nTwo.")
+    }
+}

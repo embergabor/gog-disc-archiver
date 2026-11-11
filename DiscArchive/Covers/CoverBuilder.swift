@@ -38,7 +38,7 @@ enum CoverBuilder {
             details.append(ByteText.gb(game.bytes))
             games.append(CoverGame(id: game.folder, title: game.title, edition: game.edition, byline: game.info?.byline ?? "",
                                    genres: game.info?.genres ?? [], details: details.joined(separator: " · "),
-                                   summary: game.info?.summary, portrait: portrait, wide: wide))
+                                   summary: game.info?.summary.map { Self.shortSummary($0) }, portrait: portrait, wide: wide))
         }
         let source = games.first?.portrait
         var facts: [(String, String)] = [("Burned", "\(DateText.day(record.burnedAt)) · \(record.media.longName) · \(record.speed)×")]
@@ -55,9 +55,8 @@ enum CoverBuilder {
             facts.append(("Set", "\(setID) 1/\(total) to \(total)/\(total) hold only this game"))
             facts.append(("Install", "copy the game's folder from all \(total) discs into one folder, run setup_*.exe"))
             if let i = games.indices.first {
-                let files = DiscPlanner.installOrder(record.games[0].files.map { SourceFile(relativePath: String($0.path.dropFirst(record.games[0].folder.count + 1)), size: $0.size) })
-                    .map(\.relativePath)
-                let range = files.count > 1 ? "\(files.first!) … \(files.last!)" : (files.first ?? "")
+                let files = record.games[0].files.map { String($0.path.dropFirst(record.games[0].folder.count + 1)) }
+                let range = Self.partsText(files)
                 let release = record.games[0].releaseText.map { $0 + " · " } ?? ""
                 games[i].details = release + "Part \(part) of \(total) · " + range + " · " + ByteText.gb(record.gameBytes)
             }
@@ -66,6 +65,45 @@ enum CoverBuilder {
         }
         return CoverDisc(id: record.id, idText: record.setID ?? record.id, partText: partText, media: record.media.label, burned: record.burnedAt,
                          subtitle: subtitle, facts: facts, games: games, backdrop: CoverStyle.backdrop(from: source))
+    }
+
+    /// "installer + parts 1–5", "parts 6–10", or the file count when the names don't follow GOG's pattern.
+    nonisolated static func partsText(_ files: [String]) -> String {
+        let hasInstaller = files.contains { !$0.contains("/") && $0.lowercased().hasSuffix(".exe") }
+        let parts = files.compactMap { name -> Int? in
+            guard let r = name.range(of: #"-(\d+)\.bin$"#, options: [.regularExpression, .caseInsensitive]) else { return nil }
+            return Int(name[r].dropFirst().dropLast(4))
+        }.sorted()
+        var pieces: [String] = []
+        if hasInstaller { pieces.append("installer") }
+        if let first = parts.first, let last = parts.last {
+            pieces.append(first == last ? "part \(first)" : "parts \(first)–\(last)")
+        }
+        let other = files.count - parts.count - (hasInstaller ? 1 : 0)
+        if other > 0 || pieces.isEmpty { pieces.append(ByteText.files(pieces.isEmpty ? files.count : other) + (pieces.isEmpty ? "" : " more")) }
+        return pieces.joined(separator: " + ")
+    }
+
+    /// Whole paragraphs up to about 520 characters; a long first paragraph ends at its last full sentence.
+    nonisolated static func shortSummary(_ text: String, limit: Int = 520) -> String {
+        var out = ""
+        for paragraph in text.components(separatedBy: "\n\n") {
+            let p = paragraph.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !p.isEmpty else { continue }
+            if out.isEmpty {
+                out = p
+            } else if out.count + p.count + 2 <= limit {
+                out += "\n\n" + p
+            } else {
+                break
+            }
+        }
+        guard out.count > limit + 160 else { return out }
+        let cut = String(out.prefix(limit))
+        if let end = cut.range(of: #"[.!?](\s|$)"#, options: [.regularExpression, .backwards]) {
+            return String(cut[..<end.lowerBound]) + String(cut[end].prefix(1))
+        }
+        return cut.trimmingCharacters(in: .whitespaces) + "…"
     }
 
     /// One A4 page per sheet: two jewel fronts or one Blu-ray wrap per page.
