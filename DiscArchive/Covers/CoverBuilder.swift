@@ -51,7 +51,8 @@ enum CoverBuilder {
             details.append(ByteText.gb(game.bytes))
             games.append(CoverGame(id: game.folder, title: game.title, edition: game.edition, byline: game.info?.byline ?? "",
                                    genres: game.info?.genres ?? [], details: details.joined(separator: " · "),
-                                   summary: game.info?.summary.map { Self.shortSummary($0) }, portrait: portrait, wide: wide))
+                                   summary: game.info?.summary.map { Self.shortSummary($0) }, portrait: portrait, wide: wide,
+                                   printPortrait: portrait.map(CoverStyle.printReady)))
         }
         let source = games.first?.portrait
         var facts: [(String, String)] = [("Burned", "\(DateText.day(record.burnedAt)) · \(record.media.longName) · \(record.speed)×")]

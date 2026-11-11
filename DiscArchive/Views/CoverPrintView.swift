@@ -7,8 +7,9 @@ struct CoverPrintView: View {
     @Environment(\.dismiss) private var dismiss
     var source: CoverSource
 
-    @State private var kind: CoverKind = .bluRay
+    @AppStorage(CoverTheme.kindKey) private var kind: CoverKind = .bluRay
     @AppStorage(CoverTheme.inkSaverKey) private var inkSaver = false
+    @AppStorage(CoverTheme.brightenKey) private var brighten = true
     @State private var selected: Set<String> = []
     @State private var covers: [String: CoverDisc] = [:]
     @State private var loading = false
@@ -86,6 +87,14 @@ struct CoverPrintView: View {
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                Toggle("Brighten box art for print", isOn: $brighten)
+                    .toggleStyle(.switch)
+                    .font(.system(size: 13, weight: .semibold))
+                    .padding(.top, 8)
+                Text("Lifts dark covers so they don't print as solid ink. Colours are kept; text and purple are unchanged.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             VStack(alignment: .leading, spacing: 6) {
                 Text("Discs").font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.secondary)
@@ -118,7 +127,7 @@ struct CoverPrintView: View {
             Group {
                 if let first = pages.first {
                     CoverSheet(kind: kind, discs: first)
-                        .environment(\.coverTheme, .purple(inkSaver: inkSaver))
+                        .environment(\.coverTheme, .purple(inkSaver: inkSaver, brighten: brighten))
                         .allowsHitTesting(false)
                         .scaleEffect(scale, anchor: .topLeading)
                         .frame(width: page.width * scale, height: page.height * scale, alignment: .topLeading)

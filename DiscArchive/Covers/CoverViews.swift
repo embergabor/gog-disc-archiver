@@ -16,6 +16,13 @@ struct CoverGame: Identifiable {
     var summary: String?
     var portrait: NSImage?
     var wide: NSImage?
+    /// The box art lifted for print (see `CoverStyle.printReady`).
+    var printPortrait: NSImage? = nil
+
+    /// The art to draw: lifted for print when that option is on.
+    func art(_ theme: CoverTheme) -> NSImage? {
+        theme.brightenArt ? (printPortrait ?? portrait) : portrait
+    }
 }
 
 /// One disc's cover content.
@@ -64,13 +71,21 @@ struct CoverTheme: Equatable {
     /// Back panel: ID, titles and the rule under the header.
     var backAccent: Color
     var backdrop: Backdrop
+    /// Draw box art lifted for print.
+    var brightenArt = false
 
     static let purpleBase = Color(hex: 0x4B2A7F)
     static let purpleLight = Color(hex: 0xC3B4E6)
 
     /// The chosen design (user, 2026-11-11): purple spine with white text, disc-groove rings around the
     /// box art, purple on white on the back. `inkSaver` turns the front white with purple text and rings.
-    static func purple(inkSaver: Bool) -> CoverTheme {
+    static func purple(inkSaver: Bool, brighten: Bool = true) -> CoverTheme {
+        var theme = purpleBaseTheme(inkSaver: inkSaver)
+        theme.brightenArt = brighten
+        return theme
+    }
+
+    private static func purpleBaseTheme(inkSaver: Bool) -> CoverTheme {
         inkSaver
             ? CoverTheme(spineBase: purpleBase, spineText: .white,
                          frontBase: .white, frontText: purpleBase, bandLine: purpleBase,
@@ -86,7 +101,14 @@ struct CoverTheme: Equatable {
 
     /// Ink saver is a remembered choice, read wherever covers are drawn or printed.
     static let inkSaverKey = "coverInkSaver"
-    static var current: CoverTheme { purple(inkSaver: UserDefaults.standard.bool(forKey: inkSaverKey)) }
+    /// Brighten box art for print: on unless turned off.
+    static let brightenKey = "coverBrightenArt"
+    /// The cover type last chosen, shared by the enlarged preview and Print covers.
+    static let kindKey = "coverKind"
+    static var brightenSetting: Bool { UserDefaults.standard.object(forKey: brightenKey) as? Bool ?? true }
+    static var current: CoverTheme {
+        purple(inkSaver: UserDefaults.standard.bool(forKey: inkSaverKey), brighten: brightenSetting)
+    }
 
     /// The first look: black spine and band, blurred art behind the covers. Kept for comparison.
     static let classic = CoverTheme(spineBase: Color(hex: 0x111111), spineText: .white,
@@ -121,6 +143,20 @@ enum CoverStyle {
         let input = CIImage(cgImage: cg)
         let blurred = input.clampedToExtent().applyingGaussianBlur(sigma: Double(max(cg.width, cg.height)) / 40).cropped(to: input.extent)
         guard let out = CIContext().createCGImage(blurred, from: input.extent) else { return nil }
+        return NSImage(cgImage: out, size: NSSize(width: cg.width, height: cg.height))
+    }
+
+    /// Box art lifted for print so dark covers don't turn into solid ink (user's pick, option A):
+    /// a gamma lift brightens shadows and midtones and keeps highlights, plus a little vibrance
+    /// so the colours don't look washed out. Applied to cover art only, never to text or the purple.
+    static func printReady(_ image: NSImage) -> NSImage {
+        guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return image }
+        let input = CIImage(cgImage: cg)
+        let lifted = input
+            .applyingFilter("CIGammaAdjust", parameters: ["inputPower": 0.72])
+            .applyingFilter("CIVibrance", parameters: ["inputAmount": 0.15])
+            .cropped(to: input.extent)
+        guard let out = CIContext().createCGImage(lifted, from: input.extent) else { return image }
         return NSImage(cgImage: out, size: NSSize(width: cg.width, height: cg.height))
     }
 
@@ -211,7 +247,7 @@ struct FrontArt: View {
 
     @ViewBuilder private func single(_ game: CoverGame) -> some View {
         let inset = mm(6)
-        if let portrait = game.portrait {
+        if let portrait = game.art(theme) {
             Image(nsImage: portrait)
                 .resizable()
                 .aspectRatio(contentMode: .fit)
@@ -254,7 +290,7 @@ struct FrontArt: View {
 
     @ViewBuilder private func tile(_ game: CoverGame, w: CGFloat, h: CGFloat) -> some View {
         ZStack {
-            if let portrait = game.portrait {
+            if let portrait = game.art(theme) {
                 Image(nsImage: portrait)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
@@ -468,7 +504,7 @@ struct BackPanel: View {
         let thumbW: CGFloat = style == .full ? mm(room < 0.9 ? 12 : 15) : mm(8.5)
         return HStack(alignment: .top, spacing: mm(3)) {
             Group {
-                if let portrait = game.portrait {
+                if let portrait = game.art(theme) {
                     Image(nsImage: portrait).resizable().aspectRatio(contentMode: .fill)
                 } else {
                     Color(hex: 0xE6E6E6)

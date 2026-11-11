@@ -600,6 +600,7 @@ private struct CoverPreviewCard: View {
     @State private var covers: [String: CoverDisc] = [:]
     @State private var enlarged: String?
     @AppStorage(CoverTheme.inkSaverKey) private var inkSaver = false
+    @AppStorage(CoverTheme.brightenKey) private var brighten = true
 
     private static let scale: CGFloat = 0.55
 
@@ -624,7 +625,7 @@ private struct CoverPreviewCard: View {
                                 Group {
                                     if let cover = covers[disc.id] {
                                         BDWrapView(disc: cover)
-                                            .environment(\.coverTheme, .purple(inkSaver: inkSaver))
+                                            .environment(\.coverTheme, .purple(inkSaver: inkSaver, brighten: brighten))
                                             .allowsHitTesting(false)
                                             .scaleEffect(Self.scale, anchor: .topLeading)
                                     } else {
@@ -684,8 +685,9 @@ struct CoverZoomView: View {
     var covers: [CoverDisc]
     @State var selected: String
     var print: () -> Void
-    @State private var kind: CoverKind = .bluRay
+    @AppStorage(CoverTheme.kindKey) private var kind: CoverKind = .bluRay
     @AppStorage(CoverTheme.inkSaverKey) private var inkSaver = false
+    @AppStorage(CoverTheme.brightenKey) private var brighten = true
 
     var body: some View {
         let index = covers.firstIndex { $0.id == selected } ?? 0
@@ -700,6 +702,9 @@ struct CoverZoomView: View {
                 Toggle("Ink saver", isOn: $inkSaver)
                     .toggleStyle(.switch)
                     .help("White front with purple text and rings; the spine stays purple")
+                Toggle("Brighten art", isOn: $brighten)
+                    .toggleStyle(.switch)
+                    .help("Lift dark box art so it doesn't print as solid ink")
                 PillPicker(options: [CoverKind.bluRay, .jewel, .jewelTray].map { ($0, $0.shortLabel) }, selection: $kind)
                 if covers.count > 1 {
                     Button { step(-1, from: index) } label: { Image(systemName: "chevron.left") }
@@ -735,7 +740,7 @@ struct CoverZoomView: View {
                                 }
                             }
                         }
-                        .environment(\.coverTheme, .purple(inkSaver: inkSaver))
+                        .environment(\.coverTheme, .purple(inkSaver: inkSaver, brighten: brighten))
                         // Covers have nothing to click, and their blurred backdrop reaches past the frame,
                         // which would otherwise swallow clicks on the header controls.
                         .allowsHitTesting(false)
