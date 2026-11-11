@@ -165,6 +165,30 @@ final class BurnJob {
         task?.cancel()
     }
 
+    #if DEBUG
+    /// A job frozen part-way, for screenshots: `done` steps finished, `running` at `fraction`.
+    static func preview(plan: BurnPlan, done: [StepID], running: StepID, fraction: Double, rate: Double?, minutes: [StepID: Double]) -> BurnJob {
+        let job = BurnJob(plan: plan, par2Available: false)
+        var clock = Date().addingTimeInterval(-minutes.values.reduce(0, +) * 60)
+        for i in job.steps.indices {
+            let id = job.steps[i].id
+            if id == .recovery { job.steps[i].state = .skipped; continue }
+            guard done.contains(id) || id == running else { continue }
+            job.steps[i].started = clock
+            clock = clock.addingTimeInterval((minutes[id] ?? 0) * 60)
+            if done.contains(id) {
+                job.steps[i].state = .done
+                job.steps[i].finished = clock
+            } else {
+                job.steps[i].state = .running
+            }
+        }
+        job.fraction = fraction
+        job.writeRate = rate
+        return job
+    }
+    #endif
+
     // MARK: - Steps
 
     private func run(writer: DiscWriter, par2: URL?, paths: AppPaths, save: @escaping @MainActor (DiscRecord) -> Void) async {

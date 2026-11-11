@@ -705,9 +705,9 @@ enum CoverKind: String, CaseIterable, Identifiable {
 
     var note: String {
         switch self {
-        case .jewel: "Jewel case booklet · 240 × 120 mm, folds to 120 × 120 · print at 100% on A4 · cut on the corner marks, fold at the middle marks so the front faces out"
-        case .jewelTray: "Jewel case front 120 × 120 mm and tray inlay 151 × 118 mm (6.5 mm spines) · print at 100% on A4 · cut on the corner marks, fold the tray's spines at the marks"
-        case .bluRay: "Blu-ray case cover, 14 mm spine · 271.7 × 148.4 mm · print at 100% on A4 · cut on the corner marks, fold at the spine marks"
+        case .jewel: "Jewel case booklet · 240 × 120 mm, folds to 120 × 120 · print at 100% on A4 · cut along the dotted lines, fold at the middle marks so the front faces out"
+        case .jewelTray: "Jewel case front 120 × 120 mm and tray inlay 151 × 118 mm (6.5 mm spines) · print at 100% on A4 · cut along the dotted lines, fold the tray's spines at the marks"
+        case .bluRay: "Blu-ray case cover, 14 mm spine · 271.7 × 148.4 mm · print at 100% on A4 · cut along the dotted lines, fold at the spine marks"
         }
     }
 }

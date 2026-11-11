@@ -42,6 +42,11 @@ final class BurnSession {
         }
     }
 
+    #if DEBUG
+    /// For screenshots: show a prepared job.
+    func showPreview(_ job: BurnJob) { self.job = job }
+    #endif
+
     /// Move on to the next disc; the caller starts it.
     func advance() {
         guard !isLast else { return }

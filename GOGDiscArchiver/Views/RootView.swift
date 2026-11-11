@@ -106,7 +106,7 @@ private struct Sidebar: View {
         .disabled(model.job?.isRunning == true)
         .safeAreaInset(edge: .bottom) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Catalogue: " + abbreviate(model.paths.catalogue.path))
+                Text("Archive: " + (UserDefaults.standard.string(forKey: "archiveDisplayName") ?? abbreviate(model.paths.root.path)))
                 if Features.recovery {
                     Text("Recovery data: " + abbreviate(model.paths.sets.path))
                 }

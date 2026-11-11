@@ -47,7 +47,7 @@ struct ArchiveView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .navigationTitle("All discs")
-        .navigationSubtitle("\(model.discs.count) discs · \(ByteText.gb(model.discs.reduce(0) { $0 + $1.gameBytes })) · \(model.dueCount) need a check")
+        .navigationSubtitle("\(model.discs.count == 1 ? "1 disc" : "\(model.discs.count) discs") · \(ByteText.gb(model.discs.reduce(0) { $0 + $1.gameBytes })) · \(model.dueCount) need a check")
         .toolbar {
             ToolbarItem(placement: .status) { DriveBadge() }
             ToolbarItem(placement: .primaryAction) {
