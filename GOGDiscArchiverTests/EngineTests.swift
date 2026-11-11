@@ -1,5 +1,5 @@
 import XCTest
-@testable import DiscArchive
+@testable import GOGDiscArchiver
 
 final class ModelTests: XCTestCase {
     func testMediaCapacities() {

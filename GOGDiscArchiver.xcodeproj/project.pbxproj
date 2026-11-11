@@ -12,25 +12,25 @@
 			containerPortal = A20000000000000000000001 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = A20000000000000000000010;
-			remoteInfo = DiscArchive;
+			remoteInfo = GOGDiscArchiver;
 		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		A20000000000000000000004 /* Disc Archive.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Disc Archive.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-		A20000000000000000000005 /* DiscArchiveTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DiscArchiveTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A20000000000000000000004 /* GOG Disc Archiver.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "GOG Disc Archiver.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		A20000000000000000000005 /* GOGDiscArchiverTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GOGDiscArchiverTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A20000000000000000000008 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		A20000000000000000000006 /* DiscArchive */ = {
+		A20000000000000000000006 /* GOGDiscArchiver */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = DiscArchive;
+			path = GOGDiscArchiver;
 			sourceTree = "<group>";
 		};
-		A20000000000000000000007 /* DiscArchiveTests */ = {
+		A20000000000000000000007 /* GOGDiscArchiverTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = DiscArchiveTests;
+			path = GOGDiscArchiverTests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -56,8 +56,8 @@
 		A20000000000000000000002 = {
 			isa = PBXGroup;
 			children = (
-				A20000000000000000000006 /* DiscArchive */,
-				A20000000000000000000007 /* DiscArchiveTests */,
+				A20000000000000000000006 /* GOGDiscArchiver */,
+				A20000000000000000000007 /* GOGDiscArchiverTests */,
 				A20000000000000000000009 /* Config */,
 				A20000000000000000000003 /* Products */,
 			);
@@ -66,8 +66,8 @@
 		A20000000000000000000003 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				A20000000000000000000004 /* Disc Archive.app */,
-				A20000000000000000000005 /* DiscArchiveTests.xctest */,
+				A20000000000000000000004 /* GOG Disc Archiver.app */,
+				A20000000000000000000005 /* GOGDiscArchiverTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -83,9 +83,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		A20000000000000000000010 /* DiscArchive */ = {
+		A20000000000000000000010 /* GOGDiscArchiver */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = A20000000000000000000040 /* Build configuration list for PBXNativeTarget "DiscArchive" */;
+			buildConfigurationList = A20000000000000000000040 /* Build configuration list for PBXNativeTarget "GOGDiscArchiver" */;
 			buildPhases = (
 				A20000000000000000000011 /* Sources */,
 				A20000000000000000000012 /* Frameworks */,
@@ -96,18 +96,18 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				A20000000000000000000006 /* DiscArchive */,
+				A20000000000000000000006 /* GOGDiscArchiver */,
 			);
-			name = DiscArchive;
+			name = GOGDiscArchiver;
 			packageProductDependencies = (
 			);
-			productName = DiscArchive;
-			productReference = A20000000000000000000004 /* Disc Archive.app */;
+			productName = GOGDiscArchiver;
+			productReference = A20000000000000000000004 /* GOG Disc Archiver.app */;
 			productType = "com.apple.product-type.application";
 		};
-		A20000000000000000000020 /* DiscArchiveTests */ = {
+		A20000000000000000000020 /* GOGDiscArchiverTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = A20000000000000000000050 /* Build configuration list for PBXNativeTarget "DiscArchiveTests" */;
+			buildConfigurationList = A20000000000000000000050 /* Build configuration list for PBXNativeTarget "GOGDiscArchiverTests" */;
 			buildPhases = (
 				A20000000000000000000021 /* Sources */,
 				A20000000000000000000022 /* Frameworks */,
@@ -119,13 +119,13 @@
 				A20000000000000000000025 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				A20000000000000000000007 /* DiscArchiveTests */,
+				A20000000000000000000007 /* GOGDiscArchiverTests */,
 			);
-			name = DiscArchiveTests;
+			name = GOGDiscArchiverTests;
 			packageProductDependencies = (
 			);
-			productName = DiscArchiveTests;
-			productReference = A20000000000000000000005 /* DiscArchiveTests.xctest */;
+			productName = GOGDiscArchiverTests;
+			productReference = A20000000000000000000005 /* GOGDiscArchiverTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
 /* End PBXNativeTarget section */
@@ -147,7 +147,7 @@
 					};
 				};
 			};
-			buildConfigurationList = A20000000000000000000030 /* Build configuration list for PBXProject "DiscArchive" */;
+			buildConfigurationList = A20000000000000000000030 /* Build configuration list for PBXProject "GOGDiscArchiver" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -161,8 +161,8 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				A20000000000000000000010 /* DiscArchive */,
-				A20000000000000000000020 /* DiscArchiveTests */,
+				A20000000000000000000010 /* GOGDiscArchiver */,
+				A20000000000000000000020 /* GOGDiscArchiverTests */,
 			);
 		};
 /* End PBXProject section */
@@ -204,7 +204,7 @@
 /* Begin PBXTargetDependency section */
 		A20000000000000000000025 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = A20000000000000000000010 /* DiscArchive */;
+			target = A20000000000000000000010 /* GOGDiscArchiver */;
 			targetProxy = A20000000000000000000024 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -278,7 +278,7 @@
 				"ENABLE_HARDENED_RUNTIME[sdk=macosx*]" = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Config/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Disc Archive";
+				INFOPLIST_KEY_CFBundleDisplayName = "GOG Disc Archiver";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = (
@@ -286,9 +286,9 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.embergabor.DiscArchive;
-				PRODUCT_MODULE_NAME = DiscArchive;
-				PRODUCT_NAME = "Disc Archive";
+				PRODUCT_BUNDLE_IDENTIFIER = com.embergabor.GOGDiscArchiver;
+				PRODUCT_MODULE_NAME = GOGDiscArchiver;
+				PRODUCT_NAME = "GOG Disc Archiver";
 				SDKROOT = macosx;
 				SUPPORTED_PLATFORMS = macosx;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -309,7 +309,7 @@
 				"ENABLE_HARDENED_RUNTIME[sdk=macosx*]" = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Config/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Disc Archive";
+				INFOPLIST_KEY_CFBundleDisplayName = "GOG Disc Archiver";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = (
@@ -317,9 +317,9 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.embergabor.DiscArchive;
-				PRODUCT_MODULE_NAME = DiscArchive;
-				PRODUCT_NAME = "Disc Archive";
+				PRODUCT_BUNDLE_IDENTIFIER = com.embergabor.GOGDiscArchiver;
+				PRODUCT_MODULE_NAME = GOGDiscArchiver;
+				PRODUCT_NAME = "GOG Disc Archiver";
 				SDKROOT = macosx;
 				SUPPORTED_PLATFORMS = macosx;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -335,11 +335,11 @@
 				DEVELOPMENT_TEAM = 679574875X;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.embergabor.DiscArchiveTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.embergabor.GOGDiscArchiverTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = macosx;
 				SWIFT_EMIT_LOC_STRINGS = NO;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Disc Archive.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Disc Archive";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/GOG Disc Archiver.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/GOG Disc Archiver";
 			};
 			name = Debug;
 		};
@@ -352,18 +352,18 @@
 				DEVELOPMENT_TEAM = 679574875X;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.embergabor.DiscArchiveTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.embergabor.GOGDiscArchiverTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = macosx;
 				SWIFT_EMIT_LOC_STRINGS = NO;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Disc Archive.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Disc Archive";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/GOG Disc Archiver.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/GOG Disc Archiver";
 			};
 			name = Release;
 		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		A20000000000000000000030 /* Build configuration list for PBXProject "DiscArchive" */ = {
+		A20000000000000000000030 /* Build configuration list for PBXProject "GOGDiscArchiver" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				A20000000000000000000031 /* Debug */,
@@ -372,7 +372,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		A20000000000000000000040 /* Build configuration list for PBXNativeTarget "DiscArchive" */ = {
+		A20000000000000000000040 /* Build configuration list for PBXNativeTarget "GOGDiscArchiver" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				A20000000000000000000041 /* Debug */,
@@ -381,7 +381,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		A20000000000000000000050 /* Build configuration list for PBXNativeTarget "DiscArchiveTests" */ = {
+		A20000000000000000000050 /* Build configuration list for PBXNativeTarget "GOGDiscArchiverTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				A20000000000000000000051 /* Debug */,

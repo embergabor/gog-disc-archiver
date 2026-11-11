@@ -12,7 +12,7 @@ struct RootView: View {
             Detail()
         }
         .background(Theme.window)
-        .alert("Disc Archive", isPresented: Binding(get: { model.alert != nil }, set: { if !$0 { model.alert = nil } })) {
+        .alert("GOG Disc Archiver", isPresented: Binding(get: { model.alert != nil }, set: { if !$0 { model.alert = nil } })) {
             Button("OK") { model.alert = nil }
         } message: {
             Text(model.alert ?? "")

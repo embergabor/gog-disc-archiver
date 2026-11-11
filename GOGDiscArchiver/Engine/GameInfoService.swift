@@ -356,7 +356,7 @@ struct GameInfoService: Sendable {
 
     static func get(_ url: URL) async throws -> Data {
         var request = URLRequest(url: url, timeoutInterval: 15)
-        request.setValue("Mozilla/5.0 DiscArchive", forHTTPHeaderField: "User-Agent")
+        request.setValue("Mozilla/5.0 GOGDiscArchiver", forHTTPHeaderField: "User-Agent")
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { throw URLError(.badServerResponse) }
         return data

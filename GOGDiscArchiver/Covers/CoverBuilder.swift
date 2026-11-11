@@ -138,7 +138,7 @@ enum CoverBuilder {
     static func writePDF(kind: CoverKind, discs: [CoverDisc], to url: URL) throws {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         var box = CGRect(origin: .zero, size: kind.pageSize)
-        guard let context = CGContext(url as CFURL, mediaBox: &box, [kCGPDFContextTitle as String: "Disc Archive covers"] as CFDictionary) else {
+        guard let context = CGContext(url as CFURL, mediaBox: &box, [kCGPDFContextTitle as String: "GOG Disc Archiver covers"] as CFDictionary) else {
             throw PDFError.cannotCreate(url.path)
         }
         for page in pages(kind: kind, discs: discs) {

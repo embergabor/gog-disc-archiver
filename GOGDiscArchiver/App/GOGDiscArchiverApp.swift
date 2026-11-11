@@ -1,11 +1,11 @@
 import SwiftUI
 
 @main
-struct DiscArchiveApp: App {
+struct GOGDiscArchiverApp: App {
     @State private var model = AppModel()
 
     var body: some Scene {
-        Window("Disc Archive", id: "main") {
+        Window("GOG Disc Archiver", id: "main") {
             RootView()
                 .environment(model)
                 .frame(minWidth: 980, minHeight: 640)

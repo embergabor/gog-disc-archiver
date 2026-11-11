@@ -1,6 +1,6 @@
 import SwiftUI
 import XCTest
-@testable import DiscArchive
+@testable import GOGDiscArchiver
 
 /// Renders screens to PNG for a visual check without driving the app.
 /// Runs only when SNAPSHOT_DIR is set (xcodebuild: TEST_RUNNER_SNAPSHOT_DIR=/some/folder).

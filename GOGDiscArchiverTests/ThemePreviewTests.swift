@@ -1,6 +1,6 @@
 import SwiftUI
 import XCTest
-@testable import DiscArchive
+@testable import GOGDiscArchiver
 
 /// Previews of the chosen cover design and its ink-saver variant, from the user's real folders.
 /// Needs COVER_PREVIEW_DIR. Network.

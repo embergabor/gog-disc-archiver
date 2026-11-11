@@ -1,6 +1,6 @@
 import SwiftUI
 import XCTest
-@testable import DiscArchive
+@testable import GOGDiscArchiver
 
 /// The same cases as the Steam Deck GOG installer's tests.
 final class InstallerNameTests: XCTestCase {

@@ -15,9 +15,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "A20000000000000000000010"
-               BuildableName = "Disc Archive.app"
-               BlueprintName = "DiscArchive"
-               ReferencedContainer = "container:DiscArchive.xcodeproj">
+               BuildableName = "GOG Disc Archiver.app"
+               BlueprintName = "GOGDiscArchiver"
+               ReferencedContainer = "container:GOGDiscArchiver.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -33,9 +33,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "A20000000000000000000020"
-               BuildableName = "DiscArchiveTests.xctest"
-               BlueprintName = "DiscArchiveTests"
-               ReferencedContainer = "container:DiscArchive.xcodeproj">
+               BuildableName = "GOGDiscArchiverTests.xctest"
+               BlueprintName = "GOGDiscArchiverTests"
+               ReferencedContainer = "container:GOGDiscArchiver.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
@@ -55,9 +55,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "A20000000000000000000010"
-            BuildableName = "Disc Archive.app"
-            BlueprintName = "DiscArchive"
-            ReferencedContainer = "container:DiscArchive.xcodeproj">
+            BuildableName = "GOG Disc Archiver.app"
+            BlueprintName = "GOGDiscArchiver"
+            ReferencedContainer = "container:GOGDiscArchiver.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
       <CommandLineArguments>
@@ -78,9 +78,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "A20000000000000000000010"
-            BuildableName = "Disc Archive.app"
-            BlueprintName = "DiscArchive"
-            ReferencedContainer = "container:DiscArchive.xcodeproj">
+            BuildableName = "GOG Disc Archiver.app"
+            BlueprintName = "GOGDiscArchiver"
+            ReferencedContainer = "container:GOGDiscArchiver.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

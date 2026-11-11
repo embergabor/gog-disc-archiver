@@ -1,6 +1,6 @@
 import SwiftUI
 import XCTest
-@testable import DiscArchive
+@testable import GOGDiscArchiver
 
 /// Blu-ray cover previews from the user's real GOG folders. Runs only with COVER_PREVIEW_DIR set. Network.
 @MainActor

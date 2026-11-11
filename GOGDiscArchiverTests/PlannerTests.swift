@@ -1,5 +1,5 @@
 import XCTest
-@testable import DiscArchive
+@testable import GOGDiscArchiver
 
 final class PlannerTests: XCTestCase {
     private func game(_ name: String, _ files: [(String, Int64)]) -> GameFolder {
