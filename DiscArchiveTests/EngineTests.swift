@@ -200,3 +200,14 @@ extension Result {
         return nil
     }
 }
+
+@MainActor
+final class SourceChangeTests: XCTestCase {
+    func testBurnStopsWhenAFileChangedAfterAdding() async throws {
+        let dir = try TempDir()
+        let folder = try dir.makeGame("source/Copying", files: ["setup_copying.exe": 1000])
+        let game = try GameFolder.scan(folder)
+        try Data(count: 5000).write(to: folder.appendingPathComponent("setup_copying.exe"))
+        XCTAssertThrowsError(try BurnJob.checkUnchanged([game]))
+    }
+}

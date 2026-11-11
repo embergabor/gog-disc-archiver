@@ -142,6 +142,7 @@ final class BurnJob {
 
             // 1. Checksums
             begin(.checksums)
+            try Self.checkUnchanged(plan.games)
             let games = try await hashGames(plan.games)
             end(.checksums)
 
@@ -200,6 +201,27 @@ final class BurnJob {
         } catch {
             failRunning()
             outcome = .failed(error.localizedDescription)
+        }
+    }
+
+    enum SourceError: LocalizedError {
+        case changed(game: String, file: String)
+        var errorDescription: String? {
+            switch self {
+            case let .changed(game, file):
+                "\(file) in \(game) changed since the folder was added (still being copied?). Wait for the copy to finish, then remove the folder and add it again."
+            }
+        }
+    }
+
+    /// Every planned file must still be there with the size it had when the folder was added.
+    static func checkUnchanged(_ games: [GameFolder]) throws {
+        for game in games {
+            for file in game.files {
+                let url = game.url.appendingPathComponent(file.relativePath)
+                let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init)
+                if size != file.size { throw SourceError.changed(game: game.name, file: file.relativePath) }
+            }
         }
     }
 

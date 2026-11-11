@@ -3,6 +3,13 @@ import Foundation
 
 /// Finds games in GOG's public catalog and fetches cover art, as the Steam Deck GOG installer does.
 /// No login. Only exact title matches are used: a wrong cover is worse than none.
+extension Array {
+    func uniqued<Key: Hashable>(by key: (Element) -> Key) -> [Element] {
+        var seen = Set<Key>()
+        return filter { seen.insert(key($0)).inserted }
+    }
+}
+
 struct GameInfoService: Sendable {
     /// `~/Archive/Info`: one JSON file per lookup, and art per GOG product id.
     var cacheRoot: URL
@@ -23,21 +30,99 @@ struct GameInfoService: Sendable {
         for name in names {
             if let cached = cached(InstallerName.normalize(name)) { return cached }
         }
-        var tried = Set<String>()
-        for name in names {
-            for term in Self.searchTerms(name) where tried.insert(term.lowercased()).inserted {
-                guard let found = try? await catalogMatch(term: term, names: names) else { continue }
-                var info = found
-                info.summary = try? await summary(gogID: info.gogID)
-                var titles = [info.title]
-                if let setupFile { titles.append(InstallerName.title(setupFile)) }
-                if let productName { titles.append(productName) }
-                info.steamAppID = await steamMatch(titles: titles)
-                for n in names { store(info, key: InstallerName.normalize(n)) }
-                return info
+        let terms = names.flatMap(Self.searchTerms).uniqued(by: { $0.lowercased() })
+        var found: GameInfo?
+        // Exact title matches first everywhere; only then a GOG title whose main part (before ":" or " - ")
+        // is exactly the installer's name ("Gabriel Knight 3" → "Gabriel Knight 3: Blood of the Sacred…").
+        search: for relaxed in [false, true] {
+            // 1. GOG's store catalog: games on sale today.
+            for term in terms {
+                if let hit = try? await catalogMatch(term: term, names: names, relaxed: relaxed) { found = hit; break search }
+            }
+            // 2. Delisted games are gone from the store search but still in your GOG library. GOG Database
+            //    (gogdb.org) lists every product id; GOG's own game API still serves their box art by id.
+            for term in terms {
+                if let id = try? await gogDBMatch(term: term, names: names, relaxed: relaxed), let hit = try? await gameByID(id) {
+                    found = hit
+                    break search
+                }
             }
         }
-        return nil
+        guard var info = found else { return nil }
+        info.summary = try? await summary(gogID: info.gogID)
+        // The installer's product name and GOG's title are reliable; a title guessed from the setup file name
+        // ("Baldurs Gate" for The Original Saga) is only used when the installer has no product name.
+        var titles = [info.title]
+        if let productName { titles.append(productName) } else if let setupFile { titles.append(InstallerName.title(setupFile)) }
+        info.steamAppID = await steamMatch(titles: titles, editionOf: info.title)
+        for n in names { store(info, key: InstallerName.normalize(n)) }
+        return info
+    }
+
+    /// Product id from GOG Database's search, for an exact title match (delisted games included).
+    func gogDBMatch(term: String, names: [String], relaxed: Bool = false) async throws -> String? {
+        var parts = URLComponents(string: "https://www.gogdb.org/products")!
+        parts.queryItems = [URLQueryItem(name: "search", value: term)]
+        let html = String(decoding: try await Self.get(parts.url!), as: UTF8.self)
+        let wanted = Set(names.map(InstallerName.normalize))
+        return Self.parseGogDB(html).first { row in
+            wanted.contains(InstallerName.normalize(relaxed ? Self.mainTitle(row.title) : row.title))
+        }?.id
+    }
+
+    /// The main part of a store title: "Gabriel Knight 3: Blood of the Sacred" → "Gabriel Knight 3".
+    static func mainTitle(_ title: String) -> String {
+        var s = baseTitle(title)
+        if let colon = s.firstIndex(of: ":") { s = String(s[..<colon]) }
+        return s.trimmingCharacters(in: .whitespaces)
+    }
+
+    /// (id, title) rows of a GOG Database product list.
+    static func parseGogDB(_ html: String) -> [(id: String, title: String)] {
+        let pattern = try! NSRegularExpression(
+            pattern: #"<td class="col-id">\s*<a[^>]*href="/product/(\d+)"[^>]*>.*?<td class="col-name[^"]*">\s*<a[^>]*>\s*(.*?)\s*</a>"#,
+            options: [.dotMatchesLineSeparators])
+        let range = NSRange(html.startIndex..., in: html)
+        return pattern.matches(in: html, range: range).compactMap { m in
+            guard let id = Range(m.range(at: 1), in: html), let title = Range(m.range(at: 2), in: html) else { return nil }
+            return (String(html[id]), plainText(String(html[title])))
+        }
+    }
+
+    /// Game data and box art by GOG product id, from the API GOG Galaxy uses. Works for delisted games.
+    func gameByID(_ id: String) async throws -> GameInfo {
+        let data = try await Self.get(URL(string: "https://api.gog.com/v2/games/\(id)?locale=en-US")!)
+        guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw URLError(.cannotParseResponse) }
+        let links = root["_links"] as? [String: Any] ?? [:]
+        let embedded = root["_embedded"] as? [String: Any] ?? [:]
+        let product = embedded["product"] as? [String: Any] ?? [:]
+        func href(_ key: String) -> String? { (links[key] as? [String: Any])?["href"] as? String }
+        func names(_ key: String) -> [String] {
+            (embedded[key] as? [[String: Any]] ?? []).compactMap { $0["name"] as? String }
+        }
+        var release: String?
+        if let date = (product["globalReleaseDate"] ?? product["gogReleaseDate"]) as? String, date.count >= 10 {
+            release = String(date.prefix(10)).replacingOccurrences(of: "-", with: ".")
+        }
+        let publisher = (embedded["publisher"] as? [String: Any])?["name"] as? String
+        let systems = (embedded["supportedOperatingSystems"] as? [[String: Any]] ?? [])
+            .compactMap { ($0["operatingSystem"] as? [String: Any])?["name"] as? String }
+        return GameInfo(gogID: id,
+                        title: InstallerName.cleanStoreTitle(product["title"] as? String ?? ""),
+                        developers: names("developers").map(InstallerName.cleanStoreTitle),
+                        publishers: publisher.map { [InstallerName.cleanStoreTitle($0)] } ?? [],
+                        releaseDate: release,
+                        genres: Array(names("tags").prefix(3)),
+                        operatingSystems: systems,
+                        coverVertical: href("boxArtImage").flatMap(Self.verticalCover),
+                        coverHorizontal: href("backgroundImage").flatMap(URL.init(string:)),
+                        logo: href("logo").flatMap(URL.init(string:)))
+    }
+
+    /// GOG image URLs take a size suffix; the Galaxy vertical cover is the portrait box art (342×482).
+    static func verticalCover(_ href: String) -> URL? {
+        guard !href.contains("_glx_vertical_cover"), let dot = href.lastIndex(of: "."), href[dot...].count <= 5 else { return URL(string: href) }
+        return URL(string: href[..<dot] + "_glx_vertical_cover" + href[dot...])
     }
 
     /// The full name, the part before the first " - " / ":" / "—", and the first four words.
@@ -87,11 +172,11 @@ struct GameInfoService: Sendable {
     }
 
     func catalogMatch(_ name: String) async throws -> GameInfo? {
-        try await catalogMatch(term: name, names: [name])
+        try await catalogMatch(term: name, names: [name], relaxed: false)
     }
 
     /// Searches GOG for `term` and returns the product whose slug or title exactly matches any of `names`.
-    func catalogMatch(term: String, names: [String]) async throws -> GameInfo? {
+    func catalogMatch(term: String, names: [String], relaxed: Bool) async throws -> GameInfo? {
         let name = term
         var parts = URLComponents(string: "https://catalog.gog.com/v1/catalog")!
         parts.queryItems = [
@@ -102,7 +187,10 @@ struct GameInfoService: Sendable {
         ]
         let data = try await Self.get(parts.url!)
         let page = try JSONDecoder().decode(CatalogPage.self, from: data)
-        guard let p = names.lazy.compactMap({ Self.matchCatalog($0, products: page.products) }).first else { return nil }
+        let exact = names.lazy.compactMap { Self.matchCatalog($0, products: page.products) }.first
+        let wanted = Set(names.map(InstallerName.normalize))
+        let loose = relaxed ? page.products.first { wanted.contains(InstallerName.normalize(Self.mainTitle($0.title ?? ""))) } : nil
+        guard let p = relaxed ? loose : exact else { return nil }
         return GameInfo(gogID: p.id,
                         title: InstallerName.cleanStoreTitle(p.title ?? name),
                         developers: (p.developers ?? []).map(InstallerName.cleanStoreTitle),
@@ -110,7 +198,7 @@ struct GameInfoService: Sendable {
                         releaseDate: p.releaseDate,
                         genres: (p.genres ?? []).map(\.name),
                         operatingSystems: p.operatingSystems ?? [],
-                        coverVertical: p.coverVertical.flatMap(URL.init(string:)),
+                        coverVertical: p.coverVertical.flatMap(Self.verticalCover),
                         coverHorizontal: p.coverHorizontal.flatMap(URL.init(string:)),
                         logo: p.logo.flatMap(URL.init(string:)))
     }
@@ -141,9 +229,11 @@ struct GameInfoService: Sendable {
     /// Steam app id whose name exactly matches one of the titles, for its 600×900 portrait cover.
     /// Steam's search misses some full names ("Disco Elysium - The Final Cut"), so the part before
     /// " - " or ":" is searched too, but the match itself stays exact.
-    func steamMatch(titles: [String]) async -> Int? {
-        // Editions share the base game's Steam page: "… — Remastered" also matches "The Witcher 3: Wild Hunt".
-        let wanted = Set((titles + titles.map(Self.baseTitle)).map(InstallerName.normalize).filter { !$0.isEmpty })
+    func steamMatch(titles: [String], editionOf gogTitle: String? = nil) async -> Int? {
+        // Editions share the base game's Steam page: GOG's "… — Remastered" also matches "The Witcher 3: Wild Hunt".
+        // Only GOG's title is cut this way; cutting the installer's name would turn
+        // "Baldur's Gate - The Original Saga" into "Baldur's Gate".
+        let wanted = Set((titles + [gogTitle].compactMap { $0 }.map(Self.baseTitle)).map(InstallerName.normalize).filter { !$0.isEmpty })
         var terms: [String] = []
         for title in titles {
             terms.append(title)
@@ -152,14 +242,19 @@ struct GameInfoService: Sendable {
                 terms.append(short)
             }
         }
-        var seen = Set<String>()
-        for term in terms where seen.insert(term.lowercased()).inserted {
+        let full = Set(titles.map(InstallerName.normalize).filter { !$0.isEmpty })
+        let unique = terms.uniqued { $0.lowercased() }
+        for term in unique {
             if let id = try? await steamApp(term: term, matching: wanted) { return id }
+        }
+        // "Fallout 2" → "Fallout 2: A Post Nuclear Role Playing Game", only after no exact match.
+        for term in unique {
+            if let id = try? await steamApp(term: term, matching: full, relaxed: true) { return id }
         }
         return nil
     }
 
-    func steamApp(term: String, matching wanted: Set<String>) async throws -> Int? {
+    func steamApp(term: String, matching wanted: Set<String>, relaxed: Bool = false) async throws -> Int? {
         var parts = URLComponents(string: "https://store.steampowered.com/api/storesearch/")!
         parts.queryItems = [URLQueryItem(name: "term", value: term), URLQueryItem(name: "l", value: "english"), URLQueryItem(name: "cc", value: "US")]
         let data = try await Self.get(parts.url!)
@@ -168,7 +263,7 @@ struct GameInfoService: Sendable {
             var items: [Item]
         }
         return try JSONDecoder().decode(Search.self, from: data).items
-            .first { $0.type == "app" && wanted.contains(InstallerName.normalize($0.name ?? "")) }?.id
+            .first { $0.type == "app" && wanted.contains(InstallerName.normalize(relaxed ? Self.mainTitle($0.name ?? "") : ($0.name ?? ""))) }?.id
     }
 
     // MARK: - Art
@@ -189,7 +284,10 @@ struct GameInfoService: Sendable {
         if let steam = info.steamAppID {
             portraitSources.append(URL(string: "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/\(steam)/library_600x900_2x.jpg")!)
         }
-        if let gog = info.coverVertical { portraitSources.append(gog) }
+        if let gog = info.coverVertical {
+            portraitSources.append(Self.verticalCover(gog.absoluteString) ?? gog)
+            portraitSources.append(URL(string: gog.absoluteString.replacingOccurrences(of: "_glx_vertical_cover", with: "")) ?? gog)
+        }
         art.portrait = await download(portraitSources, to: folder.appendingPathComponent("portrait"))
         if let wide = info.coverHorizontal {
             art.wide = await download([wide], to: folder.appendingPathComponent("wide"))

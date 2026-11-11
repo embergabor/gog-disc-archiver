@@ -138,3 +138,24 @@ final class LiveLookupTests: XCTestCase {
         XCTAssertEqual(game.version, "4.04b")
     }
 }
+
+/// Live lookup for every folder in ~/Downloads/GOG, when it exists. Network.
+@MainActor
+final class LiveLibraryTests: XCTestCase {
+    func testWholeDownloadsFolder() async throws {
+        guard let out = ProcessInfo.processInfo.environment["SNAPSHOT_DIR"] else { throw XCTSkip("SNAPSHOT_DIR not set") }
+        let root = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Downloads/GOG")
+        guard let names = try? FileManager.default.contentsOfDirectory(atPath: root.path) else { throw XCTSkip("no ~/Downloads/GOG") }
+        let service = GameInfoService(cacheRoot: URL(fileURLWithPath: out).appendingPathComponent("Info"))
+        for name in names.sorted() where !name.hasPrefix(".") {
+            guard let game = try? GameFolder.scan(root.appendingPathComponent(name)) else { continue }
+            let info = await service.lookup(setupFile: game.setupFile, productName: game.installer?.productName, folderName: game.name)
+            var size = "-"
+            if let info, let file = await service.art(for: info).portrait, let image = NSImage(contentsOf: file),
+               let rep = image.representations.first {
+                size = "\(rep.pixelsWide)x\(rep.pixelsHigh)"
+            }
+            print("LIB | \(game.title) | v\(game.version ?? "-") | gog:\(info?.gogID ?? "NOT FOUND") \(info?.title ?? "") | steam:\(info?.steamAppID.map(String.init) ?? "-") | cover \(size)")
+        }
+    }
+}
