@@ -109,6 +109,7 @@ struct CoverPrintView: View {
             Group {
                 if let first = pages.first {
                     CoverSheet(kind: kind, discs: first)
+                        .allowsHitTesting(false)
                         .scaleEffect(scale, anchor: .topLeading)
                         .frame(width: page.width * scale, height: page.height * scale, alignment: .topLeading)
                         .shadow(color: .black.opacity(0.18), radius: 8, y: 3)

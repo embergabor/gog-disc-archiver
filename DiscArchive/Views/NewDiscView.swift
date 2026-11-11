@@ -536,6 +536,7 @@ private struct CoverPreviewCard: View {
                                 Group {
                                     if let cover = covers[disc.id] {
                                         BDWrapView(disc: cover)
+                                            .allowsHitTesting(false)
                                             .scaleEffect(Self.scale, anchor: .topLeading)
                                     } else {
                                         Color(hex: 0x111111)
@@ -637,6 +638,9 @@ struct CoverZoomView: View {
                                 JewelFront(disc: covers[index])
                             }
                         }
+                        // Covers have nothing to click, and their blurred backdrop reaches past the frame,
+                        // which would otherwise swallow clicks on the header controls.
+                        .allowsHitTesting(false)
                         .scaleEffect(scale, anchor: .topLeading)
                         .frame(width: size.width * scale, height: size.height * scale, alignment: .topLeading)
                         .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
@@ -646,6 +650,7 @@ struct CoverZoomView: View {
             }
             .padding(24)
             .background(Theme.track)
+            .clipped()
         }
         .frame(minWidth: 1000, idealWidth: 1300, minHeight: 640, idealHeight: 820)
         .background(Theme.window)

@@ -73,6 +73,7 @@ struct FrontArt: View {
                     .aspectRatio(contentMode: .fill)
                     .frame(width: size.width, height: size.height)
                     .clipped()
+                    .contentShape(Rectangle())
                 Color.black.opacity(0.35)
             }
             content
