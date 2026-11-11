@@ -48,6 +48,8 @@ final class AppModel {
     var session: BurnSession?
     /// A set left part-way with Finish later.
     private(set) var pending: PendingSet?
+    /// The game row being dragged to a new place in Contents.
+    var draggingGame: URL?
     /// The list order before Optimise, for Undo. Cleared by any other change to the list.
     private(set) var orderBeforeOptimise: [URL]?
     var check: CheckJob?
@@ -332,9 +334,15 @@ final class AppModel {
 
     /// Moves a game on the new disc; the order is the order of covers on the front and games on the back.
     func moveGame(_ url: URL, before target: URL) {
+        moveGame(url, to: target, after: false)
+    }
+
+    /// Moves a game just before or just after another one; `target` nil moves it to the end.
+    func moveGame(_ url: URL, to target: URL?, after: Bool) {
         guard url != target, let from = draft.games.firstIndex(where: { $0.url == url }) else { return }
         let game = draft.games.remove(at: from)
-        let to = draft.games.firstIndex(where: { $0.url == target }) ?? draft.games.count
+        var to = draft.games.count
+        if let target, let i = draft.games.firstIndex(where: { $0.url == target }) { to = after ? i + 1 : i }
         draft.games.insert(game, at: to)
         orderBeforeOptimise = nil
     }

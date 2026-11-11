@@ -3,6 +3,9 @@ import SwiftUI
 struct NewDiscView: View {
     @Environment(AppModel.self) private var model
     @State private var dropTargeted = false
+    /// Where a dragged game would land: before or after a row, or at the end (`url` nil).
+    @State private var marker: DropMarker?
+    @State private var rowHeights: [URL: CGFloat] = [:]
 
     var body: some View {
         @Bindable var model = model
@@ -125,20 +128,25 @@ struct NewDiscView: View {
             ForEach(model.draft.games) { game in
                 GameRow(game: game, thumbnail: model.thumbnails[game.url], tag: tags[game.url],
                         edition: Binding(get: { game.edition ?? "" }, set: { model.setEdition($0, for: game) })) { model.remove(game) }
-                    .draggable(GameRow.reorderPrefix + game.url.path)
-                    .dropDestination(for: String.self) { items, _ in
-                        guard let item = items.first, item.hasPrefix(GameRow.reorderPrefix) else { return false }
-                        let path = String(item.dropFirst(GameRow.reorderPrefix.count))
-                        withAnimation(.easeOut(duration: 0.15)) {
-                            model.moveGame(URL(fileURLWithPath: path, isDirectory: true), before: game.url)
-                        }
-                        return true
+                    .overlay(alignment: marker?.below == true ? .bottom : .top) {
+                        if marker?.url == game.url { InsertionLine() }
                     }
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { rowHeights[game.url] = $0 }
+                    .onDrag {
+                        model.draggingGame = game.url
+                        return NSItemProvider(object: (GameRow.reorderPrefix + game.url.path) as NSString)
+                    }
+                    .onDrop(of: [.plainText, .fileURL],
+                            delegate: RowDrop(target: game.url, height: rowHeights[game.url] ?? 52, model: model, marker: $marker))
                 Divider().overlay(Theme.rowDivider)
             }
             dropZone
                 .padding(.horizontal, 20)
                 .padding(.vertical, 16)
+                .overlay(alignment: .top) {
+                    if marker != nil && marker?.url == nil { InsertionLine() }
+                }
+                .onDrop(of: [.plainText, .fileURL], delegate: RowDrop(target: nil, height: 0, model: model, marker: $marker))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.card, in: RoundedRectangle(cornerRadius: 16))
@@ -647,5 +655,77 @@ struct CoverZoomView: View {
         let next = index + delta
         guard covers.indices.contains(next) else { return }
         selected = covers[next].id
+    }
+}
+
+struct DropMarker: Equatable {
+    var url: URL?
+    var below: Bool
+}
+
+/// The accent line showing where a dragged game will be dropped.
+private struct InsertionLine: View {
+    var body: some View {
+        HStack(spacing: 0) {
+            Circle().strokeBorder(Theme.ink, lineWidth: 2).frame(width: 9, height: 9)
+            Rectangle().fill(Theme.ink).frame(height: 3)
+        }
+        .padding(.horizontal, 10)
+        .offset(y: 0)
+        .allowsHitTesting(false)
+        .transition(.opacity)
+    }
+}
+
+/// Drops on a game row (or the end zone when `target` is nil): reorder games, or add folders from the Finder.
+private struct RowDrop: DropDelegate {
+    var target: URL?
+    var height: CGFloat
+    var model: AppModel
+    @Binding var marker: DropMarker?
+
+    private func isReorder(_ info: DropInfo) -> Bool {
+        !info.hasItemsConforming(to: [.fileURL]) && model.draggingGame != nil
+    }
+
+    private func below(_ info: DropInfo) -> Bool { target != nil && info.location.y > height / 2 }
+
+    func validateDrop(info: DropInfo) -> Bool {
+        info.hasItemsConforming(to: [.fileURL]) || model.draggingGame != nil
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        guard isReorder(info) else {
+            marker = nil
+            return DropProposal(operation: .copy)
+        }
+        let next = DropMarker(url: target, below: below(info))
+        if marker != next { marker = next }
+        return DropProposal(operation: .move)
+    }
+
+    func dropExited(info: DropInfo) {
+        if marker?.url == target { marker = nil }
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        defer {
+            marker = nil
+            model.draggingGame = nil
+        }
+        if info.hasItemsConforming(to: [.fileURL]) {
+            for provider in info.itemProviders(for: [.fileURL]) {
+                _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                    guard let url else { return }
+                    Task { @MainActor in model.addFolders([url]) }
+                }
+            }
+            return true
+        }
+        guard let dragged = model.draggingGame else { return false }
+        withAnimation(.easeOut(duration: 0.15)) {
+            model.moveGame(dragged, to: target, after: below(info))
+        }
+        return true
     }
 }

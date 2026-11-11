@@ -120,3 +120,21 @@ final class SetBurnTests: XCTestCase {
         }
     }
 }
+
+@MainActor
+final class ReorderTests: XCTestCase {
+    func testMoveBeforeAfterAndToEnd() {
+        UserDefaults.standard.register(defaults: ["archiveRoot": FileManager.default.temporaryDirectory.appendingPathComponent("DiscArchiveReorder").path])
+        let model = AppModel()
+        let urls = ["A", "B", "C", "D"].map { URL(fileURLWithPath: "/g/\($0)") }
+        model.draft.games = urls.map { GameFolder(url: $0, files: []) }
+        func names() -> [String] { model.draft.games.map(\.name) }
+
+        model.moveGame(urls[0], to: urls[2], after: true)     // A below C
+        XCTAssertEqual(names(), ["B", "C", "A", "D"])
+        model.moveGame(urls[3], to: urls[1], after: false)    // D above B
+        XCTAssertEqual(names(), ["D", "B", "C", "A"])
+        model.moveGame(urls[3], to: nil, after: false)        // D to the end
+        XCTAssertEqual(names(), ["B", "C", "A", "D"])
+    }
+}
