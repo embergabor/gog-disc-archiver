@@ -2,7 +2,8 @@ import SwiftUI
 import XCTest
 @testable import DiscArchive
 
-/// Design previews of the purple cover themes, from the user's real folders. Needs COVER_PREVIEW_DIR. Network.
+/// Previews of the chosen cover design and its ink-saver variant, from the user's real folders.
+/// Needs COVER_PREVIEW_DIR. Network.
 @MainActor
 final class ThemePreviewTests: XCTestCase {
     func testThemePreviews() async throws {
@@ -29,43 +30,32 @@ final class ThemePreviewTests: XCTestCase {
             return await CoverBuilder.disc(r, service: service)
         }
 
-        let multi = await disc("GOG-001", ["Fallout v1.2.27130 GoG", "Fallout 2", "Fallout.Tactics.v2.1.0.12.GOG.Retail-CORE",
-                                            "Gabriel Knight", "Gabriel Knight 2", "Gabriel Knight 3", "Arx Fatalis", "Chronicles of Riddick"])
+        let multi = await disc("GOG-001", ["Fallout v1.2.27130 GoG", "Fallout 2", "Gabriel Knight", "Gabriel Knight 2",
+                                            "Gabriel Knight 3", "Arx Fatalis", "Chronicles of Riddick"])
         let single = await disc("GOG-002", ["The Witcher 3 Wild Hunt"])
 
-        func sheet(_ title: String, _ items: [(String, CoverTheme, CoverDisc)]) -> some View {
-            VStack(alignment: .leading, spacing: 18) {
-                Text(title).font(.system(size: 20, weight: .bold))
-                ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(item.0).font(.system(size: 13, weight: .semibold))
-                        BDWrapView(disc: item.2)
-                            .environment(\.coverTheme, item.1)
-                            .overlay(Rectangle().stroke(Color(hex: 0xCCCCCC), lineWidth: 0.5))
-                    }
-                }
+        func item(_ label: String, _ view: some View) -> some View {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(label).font(.system(size: 13, weight: .semibold))
+                view.overlay(Rectangle().stroke(Color(hex: 0xCCCCCC), lineWidth: 0.5))
             }
-            .padding(24)
-            .background(Color(hex: 0xF4F4F4))
         }
+        let sheet = VStack(alignment: .leading, spacing: 18) {
+            Text("Chosen design: purple spine, disc-groove rings, purple on white back").font(.system(size: 20, weight: .bold))
+            item("Standard · multi-game", BDWrapView(disc: multi).environment(\.coverTheme, .purple(inkSaver: false)))
+            item("Ink saver · multi-game", BDWrapView(disc: multi).environment(\.coverTheme, .purple(inkSaver: true)))
+            item("Ink saver · single game", BDWrapView(disc: single).environment(\.coverTheme, .purple(inkSaver: true)))
+            HStack(alignment: .top, spacing: 18) {
+                item("Jewel booklet · standard", JewelBooklet(disc: single).environment(\.coverTheme, .purple(inkSaver: false)))
+                item("Jewel booklet · ink saver", JewelBooklet(disc: multi).environment(\.coverTheme, .purple(inkSaver: true)))
+            }
+        }
+        .padding(24)
+        .background(Color(hex: 0xF4F4F4))
 
-        let options: [(String, CoverTheme.Backdrop)] = [("A · Flat purple", .flat), ("B · Purple with disc-groove rings", .rings),
-                                                        ("C · Purple duotone of the box art", .duotone)]
-        let pages: [(String, AnyView)] = [
-            ("1-backdrops-multi", AnyView(sheet("Backdrop options · multi-game disc · back black on white",
-                                                options.map { ($0.0, CoverTheme.purple($0.1), multi) }))),
-            ("2-backdrops-single", AnyView(sheet("Backdrop options · single game · back black on white",
-                                                 options.map { ($0.0, CoverTheme.purple($0.1), single) }))),
-            ("3-back-styles", AnyView(sheet("Back styles (shown with backdrop A)",
-                                            [("Back: black on white", CoverTheme.purple(.flat), multi),
-                                             ("Back: purple on white", CoverTheme.purple(.flat, purpleBack: true), multi),
-                                             ("Back: purple on white, single game", CoverTheme.purple(.flat, purpleBack: true), single)]))),
-        ]
-        for (name, view) in pages {
-            let renderer = ImageRenderer(content: view)
-            renderer.scale = 1.4
-            let png = NSBitmapImageRep(data: renderer.nsImage!.tiffRepresentation!)!.representation(using: .png, properties: [:])!
-            try png.write(to: folder.appendingPathComponent("theme-\(name).png"))
-        }
+        let renderer = ImageRenderer(content: sheet)
+        renderer.scale = 1.4
+        let png = NSBitmapImageRep(data: renderer.nsImage!.tiffRepresentation!)!.representation(using: .png, properties: [:])!
+        try png.write(to: folder.appendingPathComponent("theme-chosen.png"))
     }
 }

@@ -575,6 +575,7 @@ private struct CoverPreviewCard: View {
     var plan: [PlannedDisc]
     @State private var covers: [String: CoverDisc] = [:]
     @State private var enlarged: String?
+    @AppStorage(CoverTheme.inkSaverKey) private var inkSaver = false
 
     private static let scale: CGFloat = 0.55
 
@@ -599,6 +600,7 @@ private struct CoverPreviewCard: View {
                                 Group {
                                     if let cover = covers[disc.id] {
                                         BDWrapView(disc: cover)
+                                            .environment(\.coverTheme, .purple(inkSaver: inkSaver))
                                             .allowsHitTesting(false)
                                             .scaleEffect(Self.scale, anchor: .topLeading)
                                     } else {
@@ -659,6 +661,7 @@ struct CoverZoomView: View {
     @State var selected: String
     var print: () -> Void
     @State private var kind: CoverKind = .bluRay
+    @AppStorage(CoverTheme.inkSaverKey) private var inkSaver = false
 
     var body: some View {
         let index = covers.firstIndex { $0.id == selected } ?? 0
@@ -670,6 +673,9 @@ struct CoverZoomView: View {
                     Text("\(index + 1) of \(covers.count)").font(.system(size: 12)).foregroundStyle(Theme.secondary)
                 }
                 Spacer()
+                Toggle("Ink saver", isOn: $inkSaver)
+                    .toggleStyle(.switch)
+                    .help("White front with purple text and rings; the spine stays purple")
                 PillPicker(options: [(CoverKind.bluRay, "Blu-ray case"), (CoverKind.jewel, "Jewel booklet")], selection: $kind)
                 if covers.count > 1 {
                     Button { step(-1, from: index) } label: { Image(systemName: "chevron.left") }
@@ -701,6 +707,7 @@ struct CoverZoomView: View {
                                 JewelBooklet(disc: covers[index])
                             }
                         }
+                        .environment(\.coverTheme, .purple(inkSaver: inkSaver))
                         // Covers have nothing to click, and their blurred backdrop reaches past the frame,
                         // which would otherwise swallow clicks on the header controls.
                         .allowsHitTesting(false)

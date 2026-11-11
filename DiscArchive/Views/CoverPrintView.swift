@@ -8,6 +8,7 @@ struct CoverPrintView: View {
     var source: CoverSource
 
     @State private var kind: CoverKind = .bluRay
+    @AppStorage(CoverTheme.inkSaverKey) private var inkSaver = false
     @State private var selected: Set<String> = []
     @State private var covers: [String: CoverDisc] = [:]
     @State private var loading = false
@@ -78,6 +79,15 @@ struct CoverPrintView: View {
                     .buttonStyle(.plain)
                 }
             }
+            VStack(alignment: .leading, spacing: 4) {
+                Toggle("Ink saver: white front", isOn: $inkSaver)
+                    .toggleStyle(.switch)
+                    .font(.system(size: 13, weight: .semibold))
+                Text("The front turns white with purple text and rings. The spine stays purple.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             VStack(alignment: .leading, spacing: 6) {
                 Text("Discs").font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.secondary)
                 ScrollView {
@@ -109,6 +119,7 @@ struct CoverPrintView: View {
             Group {
                 if let first = pages.first {
                     CoverSheet(kind: kind, discs: first)
+                        .environment(\.coverTheme, .purple(inkSaver: inkSaver))
                         .allowsHitTesting(false)
                         .scaleEffect(scale, anchor: .topLeading)
                         .frame(width: page.width * scale, height: page.height * scale, alignment: .topLeading)

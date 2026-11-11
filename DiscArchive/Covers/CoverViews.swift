@@ -45,30 +45,59 @@ struct CoverDisc: Identifiable {
 struct CoverTheme: Equatable {
     enum Backdrop: String, CaseIterable { case blur, flat, rings, duotone }
 
-    /// Spine, the front's surround and its ID band.
-    var base: Color
-    var baseText: Color
+    /// The spine: always solid, so the ID reads on the shelf.
+    var spineBase: Color
+    var spineText: Color
+    /// The front around the box art, and its ID band.
+    var frontBase: Color
+    var frontText: Color
+    /// A thin line above the ID band, for a white front.
+    var bandLine: Color?
+    /// Disc-groove rings on the front.
+    var ringColor: Color
+    var ringOpacity: Double
     /// Lighter shade used to tint the duotone backdrop.
     var baseLight: Color
+    /// Title cards for games with no box art.
+    var tileBackground: Color
+    var tileText: Color
     /// Back panel: ID, titles and the rule under the header.
     var backAccent: Color
     var backdrop: Backdrop
 
-    /// The original look: black spine and band, blurred art behind the covers.
-    static let classic = CoverTheme(base: Color(hex: 0x111111), baseText: .white, baseLight: Color(hex: 0x888888),
-                                    backAccent: Color(hex: 0x111111), backdrop: .blur)
-
     static let purpleBase = Color(hex: 0x4B2A7F)
     static let purpleLight = Color(hex: 0xC3B4E6)
 
-    static func purple(_ backdrop: Backdrop, purpleBack: Bool = false) -> CoverTheme {
-        CoverTheme(base: purpleBase, baseText: .white, baseLight: purpleLight,
-                   backAccent: purpleBack ? purpleBase : Color(hex: 0x111111), backdrop: backdrop)
+    /// The chosen design (user, 2026-11-11): purple spine with white text, disc-groove rings around the
+    /// box art, purple on white on the back. `inkSaver` turns the front white with purple text and rings.
+    static func purple(inkSaver: Bool) -> CoverTheme {
+        inkSaver
+            ? CoverTheme(spineBase: purpleBase, spineText: .white,
+                         frontBase: .white, frontText: purpleBase, bandLine: purpleBase,
+                         ringColor: purpleBase, ringOpacity: 0.18, baseLight: purpleLight,
+                         tileBackground: Color(hex: 0xEEE9F8), tileText: purpleBase,
+                         backAccent: purpleBase, backdrop: .rings)
+            : CoverTheme(spineBase: purpleBase, spineText: .white,
+                         frontBase: purpleBase, frontText: .white, bandLine: nil,
+                         ringColor: .white, ringOpacity: 0.12, baseLight: purpleLight,
+                         tileBackground: Color(hex: 0x2E1A4F), tileText: .white,
+                         backAccent: purpleBase, backdrop: .rings)
     }
+
+    /// Ink saver is a remembered choice, read wherever covers are drawn or printed.
+    static let inkSaverKey = "coverInkSaver"
+    static var current: CoverTheme { purple(inkSaver: UserDefaults.standard.bool(forKey: inkSaverKey)) }
+
+    /// The first look: black spine and band, blurred art behind the covers. Kept for comparison.
+    static let classic = CoverTheme(spineBase: Color(hex: 0x111111), spineText: .white,
+                                    frontBase: Color(hex: 0x111111), frontText: .white, bandLine: nil,
+                                    ringColor: .white, ringOpacity: 0.12, baseLight: Color(hex: 0x888888),
+                                    tileBackground: Color(hex: 0x2A2A2A), tileText: .white,
+                                    backAccent: Color(hex: 0x111111), backdrop: .blur)
 }
 
 private struct CoverThemeKey: EnvironmentKey {
-    static let defaultValue = CoverTheme.classic
+    static var defaultValue: CoverTheme { CoverTheme.current }
 }
 
 extension EnvironmentValues {
@@ -109,6 +138,7 @@ enum CoverStyle {
 struct DiscRings: View {
     var size: CGSize
     var color: Color
+    var opacity: Double = 0.12
 
     var body: some View {
         let center = CGPoint(x: size.width / 2, y: size.height / 2)
@@ -120,7 +150,7 @@ struct DiscRings: View {
                 r += 3.2
             }
         }
-        .stroke(color.opacity(0.12), lineWidth: 0.5)
+        .stroke(color.opacity(opacity), lineWidth: 0.5)
         .frame(width: size.width, height: size.height)
         .clipped()
     }
@@ -136,7 +166,7 @@ struct FrontArt: View {
 
     var body: some View {
         ZStack {
-            theme.base
+            theme.frontBase
             switch theme.backdrop {
             case .blur:
                 if let backdrop = disc.backdrop {
@@ -151,7 +181,7 @@ struct FrontArt: View {
             case .flat:
                 EmptyView()
             case .rings:
-                DiscRings(size: size, color: theme.baseText)
+                DiscRings(size: size, color: theme.ringColor, opacity: theme.ringOpacity)
             case .duotone:
                 if let gray = disc.grayArt {
                     Image(nsImage: gray)
@@ -245,17 +275,18 @@ struct TitleTile: View {
     var width: CGFloat
     var height: CGFloat
     var fontSize: CGFloat
+    @Environment(\.coverTheme) private var theme
 
     var body: some View {
         Text(title)
             .font(.system(size: fontSize, weight: .bold))
-            .foregroundStyle(.white)
+            .foregroundStyle(theme.tileText)
             .multilineTextAlignment(.center)
             .minimumScaleFactor(0.5)
             .padding(width * 0.08)
             .frame(width: width, height: height)
-            .background(Color(hex: 0x2A2A2A))
-            .overlay(Rectangle().stroke(Color.white.opacity(0.25), lineWidth: 0.5))
+            .background(theme.tileBackground)
+            .overlay(Rectangle().stroke(theme.tileText.opacity(0.25), lineWidth: 0.5))
     }
 }
 
@@ -272,7 +303,7 @@ struct IDBand: View {
                 Text("GOG ARCHIVE")
                     .font(.system(size: 6.5, weight: .semibold))
                     .tracking(1.2)
-                    .foregroundStyle(theme.baseText.opacity(0.75))
+                    .foregroundStyle(theme.frontText.opacity(0.75))
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(disc.idText)
                         .font(CoverStyle.mono(height * 0.42))
@@ -281,7 +312,7 @@ struct IDBand: View {
                         Text(part).font(CoverStyle.mono(height * 0.3))
                     }
                 }
-                .foregroundStyle(theme.baseText)
+                .foregroundStyle(theme.frontText)
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
@@ -289,11 +320,16 @@ struct IDBand: View {
                 Text(DateText.day(disc.burned))
             }
             .font(.system(size: 7.5, weight: .medium))
-            .foregroundStyle(theme.baseText.opacity(0.85))
+            .foregroundStyle(theme.frontText.opacity(0.85))
         }
         .padding(.horizontal, mm(5))
         .frame(width: width, height: height)
-        .background(theme.base)
+        .background(theme.frontBase)
+        .overlay(alignment: .top) {
+            if let line = theme.bandLine {
+                Rectangle().fill(line).frame(height: 1.5).padding(.horizontal, mm(5))
+            }
+        }
     }
 }
 
@@ -338,7 +374,7 @@ struct BDSpine: View {
 
     var body: some View {
         ZStack {
-            theme.base
+            theme.spineBase
             // The title starts as large as the ID and shrinks only as far as it must to fit the spine.
             HStack(spacing: 10) {
                 Text(disc.label).font(CoverStyle.mono(15)).tracking(1.5)
@@ -350,7 +386,7 @@ struct BDSpine: View {
                     .minimumScaleFactor(0.3)
                 Spacer(minLength: 0)
             }
-            .foregroundStyle(theme.baseText)
+            .foregroundStyle(theme.spineText)
             .frame(width: BDWrap.panel.height - mm(12))
             .rotationEffect(.degrees(-90))
         }
