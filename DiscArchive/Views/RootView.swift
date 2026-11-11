@@ -17,6 +17,10 @@ struct RootView: View {
         } message: {
             Text(model.alert ?? "")
         }
+        .sheet(isPresented: Binding(get: { model.coverRequest != nil }, set: { if !$0 { model.coverRequest = nil } })) {
+            CoverPrintView(initial: model.coverRequest ?? [])
+                .environment(model)
+        }
         .onChange(of: model.drive.state) { _, state in
             if model.job == nil, state.blank, let media = state.media, media != model.draft.media {
                 model.selectMedia(media)

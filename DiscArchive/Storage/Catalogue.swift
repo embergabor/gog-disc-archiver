@@ -10,6 +10,11 @@ struct AppPaths: Sendable {
 
     func set(for id: String) -> URL { sets.appendingPathComponent(id, isDirectory: true) }
 
+    /// Game info and cover art fetched from GOG and Steam.
+    var info: URL { root.appendingPathComponent("Info", isDirectory: true) }
+    /// Cover PDFs.
+    var covers: URL { root.appendingPathComponent("Covers", isDirectory: true) }
+
     static func fromDefaults() -> AppPaths {
         if let custom = UserDefaults.standard.string(forKey: "archiveRoot"), !custom.isEmpty {
             let expanded = (custom as NSString).expandingTildeInPath

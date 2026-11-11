@@ -102,10 +102,12 @@ struct ResultView: View {
         Card {
             Text("Next").font(.system(size: 15, weight: .bold))
             HStack(spacing: 12) {
-                (Text("Write ") + Text(record.id).font(Theme.mono(13)) + Text(" on the clear hub ring with a disc-safe marker and store it upright in a case."))
+                (Text("Write ") + Text(record.id).font(Theme.mono(13)) + Text(" on the clear hub ring with a disc-safe marker, print a cover for its case and store it upright."))
                     .foregroundStyle(Theme.muted)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer()
+                Button("Print cover…") { model.printCover(record.id) }
+                    .buttonStyle(PillButtonStyle())
             }
             Divider().overlay(Theme.rowDivider)
             HStack(spacing: 12) {

@@ -13,8 +13,18 @@ struct GameRecord: Codable, Hashable, Identifiable, Sendable {
     var folder: String
     var platforms: [String]
     var files: [FileRecord]
+    /// Installer build, from the setup file name ("2.6.6.0").
+    var version: String? = nil
+    /// GOG catalog data, when the game was found there.
+    var info: GameInfo? = nil
 
     var bytes: Int64 { files.reduce(0) { $0 + $1.size } }
+    var title: String { info?.title ?? folder }
+
+    /// The base game's installer, for looking the game up again.
+    var setupFile: String? {
+        InstallerName.setupFile(in: files.map { String($0.path.dropFirst(folder.count + 1)) })
+    }
 }
 
 /// One read-back of a disc: right after burning, or a later re-check.

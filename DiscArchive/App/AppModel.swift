@@ -39,11 +39,17 @@ final class AppModel {
     var alert: String?
     /// Archive selection.
     var selectedDisc: String?
+    /// Disc IDs for the Print covers sheet; the sheet shows while this is set.
+    var coverRequest: [String]?
+    /// Box art thumbnails for folders on the new disc.
+    private(set) var thumbnails: [URL: NSImage] = [:]
+    @ObservationIgnored private var artCache: [String: NSImage] = [:]
 
     let paths: AppPaths
     let store: CatalogueStore
     let drive = DriveMonitor()
     let par2: URL?
+    let infoService: GameInfoService
     /// Set with `-simulateBurn <folder>`: burns copy into that folder instead of a disc.
     let simulateFolder: URL?
 
@@ -51,6 +57,7 @@ final class AppModel {
         let paths = AppPaths.fromDefaults()
         self.paths = paths
         store = CatalogueStore(url: paths.catalogue)
+        infoService = GameInfoService(cacheRoot: paths.info)
         par2 = Par2.find()
         if let sim = UserDefaults.standard.string(forKey: "simulateBurn"), !sim.isEmpty {
             simulateFolder = URL(fileURLWithPath: (sim as NSString).expandingTildeInPath, isDirectory: true)
@@ -108,6 +115,7 @@ final class AppModel {
                         problems.append("A folder named \u{201C}\(game.name)\u{201D} is already on this disc.")
                     } else {
                         draft.games.append(game)
+                        lookUp(game)
                     }
                 } catch {
                     problems.append(error.localizedDescription)
@@ -115,6 +123,35 @@ final class AppModel {
             }
             if !problems.isEmpty { alert = problems.joined(separator: "\n") }
         }
+    }
+
+    /// Finds the game in GOG's catalog and fetches its box art for the contents list.
+    private func lookUp(_ game: GameFolder) {
+        let service = infoService
+        Task {
+            let info = await service.lookup(setupFile: game.setupFile, folderName: game.name)
+            if let i = draft.games.firstIndex(where: { $0.url == game.url }) {
+                draft.games[i].info = info
+                draft.games[i].lookedUp = true
+            }
+            if let info, let file = await service.art(for: info).portrait, let image = NSImage(contentsOf: file) {
+                thumbnails[game.url] = image
+            }
+        }
+    }
+
+    /// Box art already downloaded for a game in the catalogue (no network).
+    func cachedPortrait(_ info: GameInfo?) -> NSImage? {
+        guard let info else { return nil }
+        if let hit = artCache[info.gogID] { return hit }
+        let folder = infoService.artRoot.appendingPathComponent(info.gogID)
+        for ext in ["jpg", "png"] {
+            if let image = NSImage(contentsOf: folder.appendingPathComponent("portrait." + ext)) {
+                artCache[info.gogID] = image
+                return image
+            }
+        }
+        return nil
     }
 
     func remove(_ game: GameFolder) {
@@ -175,6 +212,11 @@ final class AppModel {
         closeJob()
         selectedDisc = id
         screen = .archive
+    }
+
+    func printCover(_ id: String) {
+        showInArchive(id)
+        coverRequest = [id]
     }
 
     // MARK: - Catalogue

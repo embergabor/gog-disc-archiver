@@ -74,7 +74,7 @@ struct NewDiscView: View {
             .padding(.vertical, 14)
             Divider().overlay(Theme.rowDivider)
             ForEach(model.draft.games) { game in
-                GameRow(game: game) { model.remove(game) }
+                GameRow(game: game, thumbnail: model.thumbnails[game.url]) { model.remove(game) }
                 Divider().overlay(Theme.rowDivider)
             }
             dropZone
@@ -114,19 +114,20 @@ struct NewDiscView: View {
 
 private struct GameRow: View {
     var game: GameFolder
+    var thumbnail: NSImage?
     var remove: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: "folder")
-                .foregroundStyle(Theme.secondary)
+            BoxArt(image: thumbnail, width: 28)
             VStack(alignment: .leading, spacing: 2) {
-                Text(game.name)
+                Text(game.title)
                     .font(.system(size: 13, weight: .semibold))
                     .lineLimit(1)
                 Text(detail)
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.secondary)
+                    .lineLimit(1)
             }
             Spacer()
             Text(ByteText.gb(game.totalBytes))
@@ -147,8 +148,13 @@ private struct GameRow: View {
     }
 
     private var detail: String {
-        let platforms = game.platforms.isEmpty ? [] : [game.platforms.joined(separator: " · ")]
-        return (platforms + [ByteText.files(game.files.count)]).joined(separator: " · ")
+        var parts: [String] = []
+        if let byline = game.info?.byline, !byline.isEmpty { parts.append(byline) }
+        parts += game.platforms
+        parts.append(ByteText.files(game.files.count))
+        if game.lookedUp && game.info == nil { parts.append("not found on GOG") }
+        if game.info?.title != nil && game.info?.title != game.name { parts.append("folder \u{201C}\(game.name)\u{201D}") }
+        return parts.joined(separator: " · ")
     }
 }
 
@@ -275,5 +281,23 @@ struct DriveBadge: View {
             .foregroundStyle(Theme.muted)
             .lineLimit(1)
             .padding(.horizontal, 10)
+    }
+}
+
+/// Portrait box art at 2:3, or a folder symbol while there is none.
+struct BoxArt: View {
+    var image: NSImage?
+    var width: CGFloat
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(nsImage: image).resizable().aspectRatio(contentMode: .fill)
+            } else {
+                Image(systemName: "folder").foregroundStyle(Theme.secondary)
+            }
+        }
+        .frame(width: width, height: width * 1.5)
+        .clipShape(RoundedRectangle(cornerRadius: 3))
     }
 }

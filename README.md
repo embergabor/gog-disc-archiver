@@ -15,7 +15,16 @@ Design canvas: https://claude.ai/artifact/7RWSCDsxvUxja4FTYAL93U
 - **Archive:** catalogue of burned discs in `~/Archive/discs.json`, search by game name,
   re-check an old disc (insert it, the check starts when it mounts). Due every 3 years.
 
-Checksums and recovery files for each disc are also kept in `~/Archive/Sets/<ID>/`.
+- **Game info and covers:** each folder is matched in GOG's public catalog by its `setup_*.exe` name
+  (the Steam Deck GOG installer's parsing and exact-match rules). Covers use portrait box art only:
+  Steam's 600×900 library cover on an exact title match, else GOG's 342×482 cover, else one made from
+  GOG's wide art with the title on a band. Print covers (Archive → Print covers…) makes an A4 PDF:
+  jewel case fronts (120 × 120 mm, two per sheet) or a Blu-ray 14 mm case wrap (271.7 × 148.4 mm)
+  with box art and ID on the front (a grid of every game's cover on multi-game discs), ID on the spine,
+  and the games with developer, year, genres, build, size and GOG's description on the back.
+
+Checksums and recovery files for each disc are also kept in `~/Archive/Sets/<ID>/`; game info and art
+in `~/Archive/Info/`, cover PDFs in `~/Archive/Covers/`.
 
 ## Disc layout
 
@@ -49,5 +58,5 @@ macOS 14+, no App Sandbox (it needs the burner and `par2`), signed with the Appl
 
 ## Not yet
 
-Covers (jewel case front, Blu-ray 14 mm wrap), games split over several discs, second copy,
+Games split over several discs, second copy,
 repair from recovery data inside the app. Not yet tried with a real burner and blank disc.

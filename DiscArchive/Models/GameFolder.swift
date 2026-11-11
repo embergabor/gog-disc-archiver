@@ -11,6 +11,18 @@ struct GameFolder: Identifiable, Hashable, Sendable {
     var id: URL { url }
     var url: URL
     var files: [SourceFile]
+    /// Filled in from GOG's catalog after the folder is added.
+    var info: GameInfo? = nil
+    /// Set once a lookup has finished, found or not.
+    var lookedUp = false
+
+    var setupFile: String? { InstallerName.setupFile(in: files.map(\.relativePath)) }
+    var version: String? {
+        guard let setupFile else { return nil }
+        let v = InstallerName.parse(setupFile).version
+        return v.isEmpty ? nil : v
+    }
+    var title: String { info?.title ?? name }
 
     /// Name on the disc and in the catalogue: the folder's own name.
     var name: String { url.lastPathComponent }

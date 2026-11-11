@@ -50,6 +50,16 @@ struct ArchiveView: View {
         .navigationSubtitle("\(model.discs.count) discs · \(ByteText.gb(model.discs.reduce(0) { $0 + $1.gameBytes })) · \(model.dueCount) need a check")
         .toolbar {
             ToolbarItem(placement: .status) { DriveBadge() }
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    model.coverRequest = model.selectedDisc.map { [$0] } ?? []
+                } label: {
+                    Label("Print covers…", systemImage: "printer")
+                        .labelStyle(.titleAndIcon)
+                }
+                .buttonStyle(PillButtonStyle())
+                .disabled(model.discs.isEmpty)
+            }
         }
         .onAppear {
             if model.selectedDisc == nil { model.selectedDisc = filtered.first?.id }
@@ -61,7 +71,7 @@ struct ArchiveView: View {
         let q = search.trimmingCharacters(in: .whitespaces)
         guard !q.isEmpty else { return sorted }
         return sorted.filter { disc in
-            disc.id.localizedCaseInsensitiveContains(q) || disc.games.contains { $0.folder.localizedCaseInsensitiveContains(q) }
+            disc.id.localizedCaseInsensitiveContains(q) || disc.games.contains { $0.folder.localizedCaseInsensitiveContains(q) || $0.title.localizedCaseInsensitiveContains(q) }
         }
     }
 }
@@ -89,7 +99,7 @@ private struct DiscRow: View {
     }
 
     private var games: String {
-        let names = disc.games.map(\.folder)
+        let names = disc.games.map(\.title)
         let q = highlight.trimmingCharacters(in: .whitespaces)
         let ordered = q.isEmpty ? names : names.filter { $0.localizedCaseInsensitiveContains(q) } + names.filter { !$0.localizedCaseInsensitiveContains(q) }
         return ordered.joined(separator: ", ")
@@ -126,10 +136,10 @@ private struct DiscDetail: View {
                     ForEach(disc.games) { game in
                         Divider().overlay(Theme.rowDivider)
                         HStack(spacing: 12) {
-                            Image(systemName: "folder").foregroundStyle(Theme.secondary)
+                            BoxArt(image: model.cachedPortrait(game.info), width: 28)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(game.folder).font(.system(size: 13, weight: .semibold))
-                                Text((game.platforms + [ByteText.files(game.files.count)]).joined(separator: " · "))
+                                Text(game.title).font(.system(size: 13, weight: .semibold))
+                                Text(([game.info?.byline].compactMap { $0 }.filter { !$0.isEmpty } + game.platforms + [ByteText.files(game.files.count)]).joined(separator: " · "))
                                     .font(.system(size: 12))
                                     .foregroundStyle(Theme.secondary)
                             }
