@@ -28,7 +28,8 @@ struct GameFolder: Identifiable, Hashable, Codable, Sendable {
         let v = InstallerName.parse(setupFile).version
         return v.isEmpty ? nil : v
     }
-    var title: String { info?.title ?? name }
+    /// The installer's own product name first (GOG renames games in its store), then GOG's title, then the folder.
+    var title: String { installer?.productName ?? info?.title ?? name }
 
     /// Name on the disc and in the catalogue: the folder's own name.
     var name: String { url.lastPathComponent }

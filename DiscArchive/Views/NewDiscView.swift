@@ -205,7 +205,7 @@ private struct GameRow: View {
         parts += game.platforms
         parts.append(ByteText.files(game.files.count))
         if game.lookedUp && game.info == nil { parts.append("not found on GOG") }
-        if game.info?.title != nil && game.info?.title != game.name { parts.append("folder \u{201C}\(game.name)\u{201D}") }
+        if game.title != game.name { parts.append("folder \u{201C}\(game.name)\u{201D}") }
         return parts.joined(separator: " · ")
     }
 }

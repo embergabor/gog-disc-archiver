@@ -19,6 +19,8 @@ struct GameRecord: Codable, Hashable, Identifiable, Sendable {
     var info: GameInfo? = nil
     /// The user's label for this release, e.g. "Next Gen".
     var edition: String? = nil
+    /// Product name from the installer's version info, used as the title.
+    var installerTitle: String? = nil
 
     /// "Next Gen · v4.04b"
     var releaseText: String? {
@@ -27,7 +29,7 @@ struct GameRecord: Codable, Hashable, Identifiable, Sendable {
     }
 
     var bytes: Int64 { files.reduce(0) { $0 + $1.size } }
-    var title: String { info?.title ?? folder }
+    var title: String { installerTitle ?? info?.title ?? folder }
 
     /// The base game's installer, for looking the game up again.
     var setupFile: String? {
