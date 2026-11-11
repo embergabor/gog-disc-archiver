@@ -9,8 +9,27 @@ struct BurnPlan: Sendable {
     var speed: Int
     var recoveryPercent: Int
     var games: [GameFolder]
+    var setID: String? = nil
+    var part: Int? = nil
+    var partCount: Int? = nil
 
-    var volumeName: String { DiscID.volumeName(for: id) }
+    init(id: String, media: Media, speed: Int, recoveryPercent: Int, games: [GameFolder]) {
+        self.id = id
+        self.media = media
+        self.speed = speed
+        self.recoveryPercent = recoveryPercent
+        self.games = games
+    }
+
+    init(disc: PlannedDisc, media: Media, speed: Int, recoveryPercent: Int) {
+        self.init(id: disc.id, media: media, speed: speed, recoveryPercent: recoveryPercent, games: disc.games)
+        setID = disc.setID
+        part = disc.part
+        partCount = disc.partCount
+    }
+
+    var label: String { DiscID.label(id: id, setID: setID, part: part, partCount: partCount) }
+    var volumeName: String { DiscID.volumeName(for: setID ?? id) + (part.map { "_\($0)" } ?? "") }
     var gameBytes: Int64 { games.reduce(0) { $0 + $1.totalBytes } }
     var fileCount: Int { games.reduce(0) { $0 + $1.files.count } }
 }
@@ -95,7 +114,7 @@ final class BurnJob {
     }
 
     func start(writer: DiscWriter, par2: URL?, paths: AppPaths, save: @escaping @MainActor (DiscRecord) -> Void) {
-        activity = ProcessInfo.processInfo.beginActivity(options: [.userInitiated, .idleSystemSleepDisabled], reason: "Burning \(plan.id)")
+        activity = ProcessInfo.processInfo.beginActivity(options: [.userInitiated, .idleSystemSleepDisabled], reason: "Burning \(plan.label)")
         task = Task { [weak self] in
             guard let self else { return }
             await self.run(writer: writer, par2: par2, paths: paths, save: save)
@@ -140,7 +159,8 @@ final class BurnJob {
             begin(.layout)
             let record = DiscRecord(id: plan.id, volumeName: plan.volumeName, media: plan.media, burnedAt: Date(),
                                     drive: writer.driveName, speed: plan.speed, recoveryPercent: recoveryFiles.isEmpty ? 0 : plan.recoveryPercent,
-                                    games: games, recoveryFiles: recoveryFiles, checks: [])
+                                    games: games, recoveryFiles: recoveryFiles, checks: [],
+                                    setID: plan.setID, part: plan.part, partCount: plan.partCount)
             let layout = try DiscLayout.make(record: record, games: plan.games, recoveryFolder: recoveryFolder)
             try Data(Checksums.render(record.allFiles).utf8).write(to: setFolder.appendingPathComponent("checksums.sha256"))
             try CatalogueStore.encoder.encode(record).write(to: setFolder.appendingPathComponent("disc.json"))
@@ -219,7 +239,7 @@ final class BurnJob {
             let weight = Double(game.totalBytes) / Double(total)
             let offset = Double(doneBytes) / Double(total)
             let files = game.files.map { game.url.appendingPathComponent($0.relativePath) }
-            let urls = try await Par2.create(tool: tool, percent: percent, name: game.name,
+            let urls = try await Par2.create(tool: tool, percent: percent, name: game.name + (plan.part.map { " part \($0)" } ?? ""),
                                              base: game.url.deletingLastPathComponent(), files: files, output: folder) { value in
                 Task { @MainActor [weak self] in self?.fraction = offset + weight * value }
             }

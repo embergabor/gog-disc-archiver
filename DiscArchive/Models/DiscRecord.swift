@@ -52,6 +52,15 @@ struct DiscRecord: Codable, Hashable, Identifiable, Sendable {
     /// Recovery files on the disc (`_archive/recovery/...`), checked like game files.
     var recoveryFiles: [FileRecord]
     var checks: [CheckRecord]
+    /// For a game split over several discs: the set's ID ("GOG-014") and this disc's place in it.
+    var setID: String? = nil
+    var part: Int? = nil
+    var partCount: Int? = nil
+
+    /// What's written on the disc: "GOG-014", or "GOG-014 2/5" for a disc of a set.
+    var label: String { DiscID.label(id: id, setID: setID, part: part, partCount: partCount) }
+    /// The ID that numbering continues from: the set's ID for a set disc.
+    var baseID: String { setID ?? id }
 
     var gameBytes: Int64 { games.reduce(0) { $0 + $1.bytes } }
     var recoveryBytes: Int64 { recoveryFiles.reduce(0) { $0 + $1.size } }

@@ -8,6 +8,9 @@ struct NewDiscView: View {
         @Bindable var model = model
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
+                if let pending = model.pending {
+                    PendingBanner(pending: pending)
+                }
                 header
                 SpaceCard()
                 HStack(alignment: .top, spacing: 18) {
@@ -20,7 +23,7 @@ struct NewDiscView: View {
             .padding(.vertical, 24)
         }
         .navigationTitle("New disc")
-        .navigationSubtitle(model.draft.id + " · not burned yet")
+        .navigationSubtitle(subtitle)
         .toolbar {
             ToolbarItem(placement: .status) {
                 DriveBadge()
@@ -29,7 +32,7 @@ struct NewDiscView: View {
                 Button {
                     model.startBurn()
                 } label: {
-                    Label("Burn disc", systemImage: "flame")
+                    Label(burnTitle, systemImage: "flame")
                         .labelStyle(.titleAndIcon)
                 }
                 .buttonStyle(PillButtonStyle(prominent: true))
@@ -39,11 +42,43 @@ struct NewDiscView: View {
         }
     }
 
+    private var plan: [PlannedDisc] { (try? model.draftPlan.get()) ?? [] }
+
+    private var burnTitle: String { plan.count > 1 ? "Burn \(plan.count) discs" : "Burn disc" }
+
+    private var subtitle: String {
+        let ids = DiscPlanner.baseIDs(plan)
+        let what = ids.count > 1 ? "\(ids.first!) to \(ids.last!)" : model.draft.id
+        return "\(what) · \(plan.count > 1 ? "\(plan.count) discs" : "1 disc") · not burned yet"
+    }
+
+    private var volumeLine: String {
+        let ids = DiscPlanner.baseIDs(plan)
+        let lead = ids.count > 1 ? "Disc IDs \(ids.joined(separator: ", "))" : "Volume name \(plan.first?.volumeName ?? DiscID.volumeName(for: model.draft.id))"
+        return lead + " · UDF, readable on Mac, Windows and Linux"
+    }
+
+    /// "GOG-014 · 5 discs" or "GOG-015" per game, shown when the games need more than one disc.
+    private var tags: [URL: String] {
+        guard plan.count > 1 else { return [:] }
+        var out: [URL: String] = [:]
+        for disc in plan {
+            for game in disc.games {
+                if let setID = disc.setID, let count = disc.partCount {
+                    out[game.url] = "\(setID) · \(count) discs"
+                } else {
+                    out[game.url] = disc.id
+                }
+            }
+        }
+        return out
+    }
+
     private var header: some View {
         @Bindable var model = model
         return HStack(alignment: .bottom, spacing: 16) {
             VStack(alignment: .leading, spacing: 6) {
-                Text("Disc ID")
+                Text("First disc ID")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Theme.secondary)
                 TextField("GOG-014", text: $model.draft.id)
@@ -51,7 +86,7 @@ struct NewDiscView: View {
                     .font(Theme.mono(28, .bold))
                     .tracking(2)
                     .frame(maxWidth: 260)
-                Text("Volume name \(DiscID.volumeName(for: model.draft.id)) · UDF, readable on Mac, Windows and Linux")
+                Text(volumeLine)
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.secondary)
             }
@@ -74,7 +109,7 @@ struct NewDiscView: View {
             .padding(.vertical, 14)
             Divider().overlay(Theme.rowDivider)
             ForEach(model.draft.games) { game in
-                GameRow(game: game, thumbnail: model.thumbnails[game.url]) { model.remove(game) }
+                GameRow(game: game, thumbnail: model.thumbnails[game.url], tag: tags[game.url]) { model.remove(game) }
                 Divider().overlay(Theme.rowDivider)
             }
             dropZone
@@ -115,6 +150,7 @@ struct NewDiscView: View {
 private struct GameRow: View {
     var game: GameFolder
     var thumbnail: NSImage?
+    var tag: String?
     var remove: () -> Void
 
     var body: some View {
@@ -130,6 +166,14 @@ private struct GameRow: View {
                     .lineLimit(1)
             }
             Spacer()
+            if let tag {
+                Text(tag)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Theme.ink)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 2)
+                    .background(Theme.tint, in: Capsule())
+            }
             Text(ByteText.gb(game.totalBytes))
                 .monospacedDigit()
                 .foregroundStyle(Theme.muted)
@@ -163,44 +207,65 @@ private struct SpaceCard: View {
 
     var body: some View {
         let draft = model.draft
+        let percent = draft.effectiveRecovery(par2Available: model.par2Available)
+        let plan = (try? model.draftPlan.get()) ?? []
         let cap = draft.media.capacity
         let games = draft.gameBytes
-        let recovery = draft.recoveryBytes(par2Available: model.par2Available)
-        let used = games + recovery
-        let fits = draft.fits(par2Available: model.par2Available)
-        let fill = fits ? Theme.accent : Color(hex: 0xE39A91)
+        let recovery = plan.reduce(Int64(0)) { $0 + DiscPlanner.recoveryBytes($1.dataBytes, games: $1.games.count, percent: percent) }
 
         Card {
             HStack(alignment: .firstTextBaseline) {
-                Text("Space").font(.system(size: 15, weight: .bold))
+                Text(plan.count > 1 ? "\(plan.count) discs" : "Space").font(.system(size: 15, weight: .bold))
                 Spacer()
-                Text(ByteText.gb(used)).font(.system(size: 13, weight: .bold)).monospacedDigit()
-                + Text(" of \(ByteText.gb(cap))").font(.system(size: 13)).foregroundStyle(Theme.secondary)
-            }
-            GeometryReader { geo in
-                let w = geo.size.width
-                HStack(spacing: 0) {
-                    Rectangle().fill(fill)
-                        .frame(width: w * min(1, Double(games) / Double(cap)))
-                    Rectangle().fill(fill.opacity(0.45))
-                        .frame(width: w * max(0, min(1 - Double(games) / Double(cap), Double(recovery) / Double(cap))))
-                    Spacer(minLength: 0)
+                if plan.count > 1 {
+                    Text("\(plan.count) × \(draft.media.label) · \(ByteText.gb(games + recovery)) in all")
+                        .font(.system(size: 13)).foregroundStyle(Theme.muted)
+                } else {
+                    Text(ByteText.gb(games + recovery)).font(.system(size: 13, weight: .bold)).monospacedDigit()
+                    + Text(" of \(ByteText.gb(cap))").font(.system(size: 13)).foregroundStyle(Theme.secondary)
                 }
             }
-            .frame(height: 14)
-            .background(Theme.track)
-            .clipShape(Capsule())
-            .accessibilityHidden(true)
+            if plan.count > 1 {
+                ForEach(plan) { disc in
+                    let rec = DiscPlanner.recoveryBytes(disc.dataBytes, games: disc.games.count, percent: percent)
+                    Divider().overlay(Theme.rowDivider)
+                    HStack(alignment: .firstTextBaseline, spacing: 12) {
+                        Text(disc.label).font(Theme.mono(13)).frame(minWidth: 110, alignment: .leading)
+                        Text(disc.summary)
+                            .font(.system(size: 12))
+                            .foregroundStyle(Theme.muted)
+                            .lineLimit(2)
+                        Spacer()
+                        Text("\(ByteText.gb(disc.dataBytes + rec)) of \(ByteText.gb(cap))")
+                            .font(.system(size: 12)).monospacedDigit().foregroundStyle(Theme.secondary)
+                    }
+                    SpaceBar(games: disc.dataBytes, recovery: rec, capacity: cap, height: 10)
+                }
+            } else {
+                SpaceBar(games: games, recovery: recovery, capacity: cap, height: 14)
+            }
             HStack(spacing: 18) {
-                legend(fill, "Games \(ByteText.gb(games))")
-                legend(fill.opacity(0.45), model.par2Available ? "Recovery data \(ByteText.gb(recovery))" : "Recovery data off (par2 not installed)")
-                legend(Theme.track, fits ? "Free \(ByteText.gb(max(0, draft.media.usable - used)))" : "No space left")
+                legend(Theme.accent, "Games \(ByteText.gb(games))")
+                legend(Theme.accent.opacity(0.45), model.par2Available ? "Recovery data \(ByteText.gb(recovery))" : "Recovery data off (par2 not installed)")
+                if plan.count <= 1 {
+                    legend(Theme.track, "Free \(ByteText.gb(max(0, draft.media.usable - games - recovery)))")
+                }
             }
             .font(.system(size: 12))
             .foregroundStyle(Theme.muted)
-            if !fits {
-                Label("\(ByteText.gb(used - draft.media.usable)) too much for one \(draft.media.label). Remove a game or pick a bigger disc.",
-                      systemImage: "exclamationmark.triangle")
+            if plan.count > 1 {
+                Label("A game too big for one disc gets discs of its own under one ID (1/5 … 5/5), and its last disc is never topped up with other games. Files are never cut in half. Each disc has its own checksums and recovery data. To install a split game, copy its folder from every disc into one folder.",
+                      systemImage: "info.circle")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Theme.window, in: RoundedRectangle(cornerRadius: 10))
+            }
+            if case .failure(let error) = model.draftPlan, error != .noGames {
+                Label(error.message, systemImage: "exclamationmark.triangle")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Tone.bad.foreground)
                     .padding(.horizontal, 12)
@@ -299,5 +364,67 @@ struct BoxArt: View {
         }
         .frame(width: width, height: width * 1.5)
         .clipShape(RoundedRectangle(cornerRadius: 3))
+    }
+}
+
+private struct SpaceBar: View {
+    var games: Int64
+    var recovery: Int64
+    var capacity: Int64
+    var height: CGFloat
+
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            let g = min(1, Double(games) / Double(capacity))
+            HStack(spacing: 0) {
+                Rectangle().fill(Theme.accent).frame(width: w * g)
+                Rectangle().fill(Theme.accent.opacity(0.45)).frame(width: w * max(0, min(1 - g, Double(recovery) / Double(capacity))))
+                Spacer(minLength: 0)
+            }
+        }
+        .frame(height: height)
+        .background(Theme.track)
+        .clipShape(Capsule())
+        .accessibilityHidden(true)
+    }
+}
+
+private struct PendingBanner: View {
+    @Environment(AppModel.self) private var model
+    var pending: PendingSet
+    @State private var confirmDiscard = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "opticaldisc")
+                .foregroundStyle(Theme.ink)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Unfinished set").font(.system(size: 13, weight: .semibold))
+                Text(pending.summary + " · " + pending.discs.flatMap(\.games).map(\.title).uniqued().joined(separator: ", "))
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.muted)
+                    .lineLimit(1)
+            }
+            Spacer()
+            Button("Discard…") { confirmDiscard = true }
+                .buttonStyle(PillButtonStyle())
+            Button("Continue") { model.continuePending() }
+                .buttonStyle(PillButtonStyle(prominent: true))
+        }
+        .padding(14)
+        .background(Theme.tint, in: RoundedRectangle(cornerRadius: 14))
+        .confirmationDialog("Discard the rest of this set?", isPresented: $confirmDiscard) {
+            Button("Discard", role: .destructive) { model.discardPending() }
+        } message: {
+            Text("The discs already burned stay in the archive. The ones not burned yet are forgotten.")
+        }
+    }
+}
+
+extension Array where Element: Hashable {
+    func uniqued() -> [Element] {
+        var seen = Set<Element>()
+        return filter { seen.insert($0).inserted }
     }
 }

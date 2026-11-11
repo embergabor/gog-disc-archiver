@@ -33,9 +33,9 @@ final class ModelTests: XCTestCase {
     func testDraftFits() {
         var draft = DiscDraft(id: "GOG-001", media: .dvdR)
         draft.games = [GameFolder(url: URL(fileURLWithPath: "/tmp/A"), files: [SourceFile(relativePath: "a.bin", size: 4_300_000_000)])]
-        XCTAssertTrue(draft.fits(par2Available: false))
+        XCTAssertEqual(try draft.plan(par2Available: false).get().count, 1)
         draft.recoveryPercent = 10
-        XCTAssertFalse(draft.fits(par2Available: true))
+        XCTAssertEqual(draft.plan(par2Available: true).failure, .fileTooBig(game: "A", file: "a.bin"))
     }
 }
 
@@ -191,5 +191,12 @@ extension DiscRecord {
                    drive: "Test drive", speed: 4, recoveryPercent: 5,
                    games: [GameRecord(folder: "A", platforms: ["Windows"], files: [FileRecord(path: "A/x.bin", size: 3, sha256: String(repeating: "0", count: 64))])],
                    recoveryFiles: [], checks: [])
+    }
+}
+
+extension Result {
+    var failure: Failure? {
+        if case .failure(let e) = self { return e }
+        return nil
     }
 }

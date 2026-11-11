@@ -7,7 +7,7 @@ struct SourceFile: Hashable, Codable, Sendable {
 }
 
 /// A folder the user dropped in: one game's installers and extras.
-struct GameFolder: Identifiable, Hashable, Sendable {
+struct GameFolder: Identifiable, Hashable, Codable, Sendable {
     var id: URL { url }
     var url: URL
     var files: [SourceFile]

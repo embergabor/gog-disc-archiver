@@ -45,11 +45,25 @@ enum CoverBuilder {
             facts.append(("Verified", "\(DateText.day(check.date)) · \(check.filesOK) of \(check.filesTotal) files OK"))
         }
         facts.append(("On disc", record.recoveryFiles.isEmpty ? "checksums.sha256" : "checksums.sha256 · par2 recovery \(record.recoveryPercent)%"))
-        facts.append(("Install", "copy a game's folder to your drive and run setup_*.exe"))
         let count = record.games.count
-        return CoverDisc(id: record.id, media: record.media.label, burned: record.burnedAt,
-                         subtitle: "\(count == 1 ? "1 game" : "\(count) games") · \(ByteText.gb(record.gameBytes)) · \(record.media.label)",
-                         facts: facts, games: games, backdrop: CoverStyle.backdrop(from: source))
+        var subtitle = "\(count == 1 ? "1 game" : "\(count) games") · \(ByteText.gb(record.gameBytes)) · \(record.media.label)"
+        var partText: String?
+        if let part = record.part, let total = record.partCount, let setID = record.setID {
+            partText = "\(part)/\(total)"
+            subtitle = "Disc \(part) of \(total) · \(ByteText.files(record.games.first?.files.count ?? 0)) · \(ByteText.gb(record.gameBytes)) · \(record.media.label)"
+            facts.append(("Set", "\(setID) 1/\(total) to \(total)/\(total) hold only this game"))
+            facts.append(("Install", "copy the game's folder from all \(total) discs into one folder, run setup_*.exe"))
+            if let i = games.indices.first {
+                let files = DiscPlanner.installOrder(record.games[0].files.map { SourceFile(relativePath: String($0.path.dropFirst(record.games[0].folder.count + 1)), size: $0.size) })
+                    .map(\.relativePath)
+                let range = files.count > 1 ? "\(files.first!) … \(files.last!)" : (files.first ?? "")
+                games[i].details = "Part \(part) of \(total) · " + range + " · " + ByteText.gb(record.gameBytes)
+            }
+        } else {
+            facts.append(("Install", "copy a game's folder to your drive and run setup_*.exe"))
+        }
+        return CoverDisc(id: record.id, idText: record.setID ?? record.id, partText: partText, media: record.media.label, burned: record.burnedAt,
+                         subtitle: subtitle, facts: facts, games: games, backdrop: CoverStyle.backdrop(from: source))
     }
 
     /// One A4 page per sheet: two jewel fronts or one Blu-ray wrap per page.

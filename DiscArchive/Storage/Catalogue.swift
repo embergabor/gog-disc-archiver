@@ -12,6 +12,8 @@ struct AppPaths: Sendable {
 
     /// Game info and cover art fetched from GOG and Steam.
     var info: URL { root.appendingPathComponent("Info", isDirectory: true) }
+    /// A set left part-way with Finish later.
+    var pendingSet: URL { root.appendingPathComponent("pending.json") }
     /// Cover PDFs.
     var covers: URL { root.appendingPathComponent("Covers", isDirectory: true) }
 
@@ -70,6 +72,22 @@ enum DiscID {
         let used = existing.compactMap(split).filter { $0.prefix == prefix }.map(\.number)
         let n = (used.max() ?? 0) + 1
         return prefix + "-" + String(format: "%03d", n)
+    }
+
+    static func label(id: String, setID: String?, part: Int?, partCount: Int?) -> String {
+        guard let setID, let part, let partCount else { return id }
+        return "\(setID) \(part)/\(partCount)"
+    }
+
+    /// Catalogue key of one disc of a set: GOG-014-2of5. Never parsed as a number, so numbering skips it.
+    static func setDiscKey(setID: String, part: Int, of count: Int) -> String {
+        "\(setID)-\(part)of\(count)"
+    }
+
+    /// GOG-014 → GOG-015.
+    static func following(_ id: String) -> String? {
+        guard let (prefix, n) = split(id) else { return nil }
+        return prefix + "-" + String(format: "%03d", n + 1)
     }
 
     /// Volume name on the disc: GOG-014 → GOG_014 (letters, digits and underscores only).

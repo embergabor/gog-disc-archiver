@@ -35,10 +35,12 @@ private struct Detail: View {
 
     var body: some View {
         Group {
-            if let job = model.job {
-                if job.isRunning {
+            if let session = model.session {
+                if let job = session.job, job.isRunning {
                     BurnView(job: job)
-                } else {
+                } else if session.job == nil || session.waitingForNextDisc {
+                    SetView(session: session)
+                } else if let job = session.job {
                     ResultView(job: job)
                 }
             } else {

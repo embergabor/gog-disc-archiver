@@ -53,13 +53,21 @@ struct DiscLayout: Sendable {
 
     static func readmeText(for record: DiscRecord) -> String {
         var lines = [
-            "\(record.id) — archive disc",
+            "\(record.label) — archive disc",
             "Burned \(DateText.dayTime(record.burnedAt)) on \(record.media.longName).",
             "",
             "Games:",
         ]
         for game in record.games {
             lines.append("  \(game.folder)  (\(ByteText.gb(game.bytes)), \(game.files.count) files)")
+        }
+        if let part = record.part, let count = record.partCount, let game = record.games.first {
+            lines += [
+                "",
+                "This is disc \(part) of \(count) of \(game.folder). Discs \(record.setID ?? "") 1/\(count) to \(count)/\(count) hold",
+                "only this game. To install, copy the \(game.folder) folder from every disc into one folder",
+                "on your drive, then run its setup file.",
+            ]
         }
         lines += [
             "",

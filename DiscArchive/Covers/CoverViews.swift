@@ -20,6 +20,10 @@ struct CoverGame: Identifiable {
 /// One disc's cover content.
 struct CoverDisc: Identifiable {
     var id: String
+    /// "GOG-014" (the set's ID for a set disc) and "2/5" for a set disc.
+    var idText: String
+    var partText: String?
+    var label: String { partText.map { "\(idText) \($0)" } ?? idText }
     var media: String
     var burned: Date
     var subtitle: String
@@ -177,10 +181,15 @@ struct IDBand: View {
                     .font(.system(size: 6.5, weight: .semibold))
                     .tracking(1.2)
                     .foregroundStyle(.white.opacity(0.7))
-                Text(disc.id)
-                    .font(CoverStyle.mono(height * 0.42))
-                    .tracking(1.5)
-                    .foregroundStyle(.white)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(disc.idText)
+                        .font(CoverStyle.mono(height * 0.42))
+                        .tracking(1.5)
+                    if let part = disc.partText {
+                        Text(part).font(CoverStyle.mono(height * 0.3))
+                    }
+                }
+                .foregroundStyle(.white)
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
@@ -238,7 +247,7 @@ struct BDSpine: View {
         ZStack {
             CoverStyle.ink
             HStack(spacing: 8) {
-                Text(disc.id).font(CoverStyle.mono(15)).tracking(1.5)
+                Text(disc.label).font(CoverStyle.mono(15)).tracking(1.5)
                 Text(disc.spineText).font(.system(size: 8.5, weight: .semibold)).lineLimit(1)
             }
             .foregroundStyle(.white)
@@ -258,7 +267,7 @@ struct BDBack: View {
         let thumbW: CGFloat = disc.games.count <= 4 ? mm(15) : (disc.games.count <= 7 ? mm(11) : mm(8))
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
-                Text(disc.id).font(CoverStyle.mono(17)).tracking(1.2)
+                Text(disc.label).font(CoverStyle.mono(17)).tracking(1.2)
                 Spacer()
                 Text("CONTENTS").font(.system(size: 6.5, weight: .semibold)).tracking(1.2).foregroundStyle(CoverStyle.grey)
             }

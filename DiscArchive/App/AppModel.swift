@@ -13,15 +13,14 @@ struct DiscDraft {
     var gameBytes: Int64 { games.reduce(0) { $0 + $1.totalBytes } }
     var fileCount: Int { games.reduce(0) { $0 + $1.files.count } }
 
-    /// par2 adds about the chosen percentage, plus a little for its index files.
-    func recoveryBytes(par2Available: Bool) -> Int64 {
-        guard par2Available, recoveryPercent > 0, !games.isEmpty else { return 0 }
-        let perGameIndex = Int64(games.count) * 2_000_000
-        return gameBytes * Int64(recoveryPercent) / 100 + gameBytes / 2000 + perGameIndex
-    }
+    /// The recovery percentage that will really be made: none without par2.
+    func effectiveRecovery(par2Available: Bool) -> Int { par2Available ? recoveryPercent : 0 }
 
-    func usedBytes(par2Available: Bool) -> Int64 { gameBytes + recoveryBytes(par2Available: par2Available) }
-    func fits(par2Available: Bool) -> Bool { usedBytes(par2Available: par2Available) <= media.usable }
+    /// The discs these games need. One disc in the common case.
+    func plan(par2Available: Bool) -> Result<[PlannedDisc], DiscPlanner.PlanError> {
+        Result { try DiscPlanner.plan(games: games, media: media, percent: effectiveRecovery(par2Available: par2Available), firstID: id) }
+            .mapError { $0 as? DiscPlanner.PlanError ?? .noGames }
+    }
 }
 
 @MainActor
@@ -34,7 +33,9 @@ final class AppModel {
     var screen: Screen? = .newDisc
     private(set) var discs: [DiscRecord] = []
     var draft: DiscDraft
-    var job: BurnJob?
+    var session: BurnSession?
+    /// A set left part-way with Finish later.
+    private(set) var pending: PendingSet?
     var check: CheckJob?
     var alert: String?
     /// Archive selection.
@@ -71,7 +72,9 @@ final class AppModel {
         } catch {
             problem = "Could not read the catalogue at \(paths.catalogue.path): \(error.localizedDescription)"
         }
-        draft = DiscDraft(id: DiscID.next(after: loaded.map(\.id)))
+        let pending = try? CatalogueStore.decoder.decode(PendingSet.self, from: Data(contentsOf: paths.pendingSet))
+        self.pending = pending
+        draft = DiscDraft(id: DiscID.next(after: loaded.map(\.baseID) + DiscPlanner.baseIDs(pending?.discs ?? [])))
         discs = loaded
         alert = problem
         if let media = drive.state.media, drive.state.blank { selectMedia(media) }
@@ -82,6 +85,14 @@ final class AppModel {
     }
 
     var par2Available: Bool { par2 != nil }
+    var job: BurnJob? { session?.job }
+
+    var draftPlan: Result<[PlannedDisc], DiscPlanner.PlanError> { draft.plan(par2Available: par2Available) }
+
+    /// IDs already used by the catalogue or by an unfinished set.
+    private var usedIDs: [String] { discs.map(\.baseID) + DiscPlanner.baseIDs(pending?.discs ?? []) }
+
+    private func nextID() -> String { DiscID.next(after: usedIDs) }
     var isSimulating: Bool { simulateFolder != nil }
 
     var driveSummary: String {
@@ -160,52 +171,116 @@ final class AppModel {
 
     /// Why Burn is not available, or nil when it is.
     var burnBlocker: String? {
-        if draft.games.isEmpty { return "Add game folders first." }
-        if !draft.fits(par2Available: par2Available) { return "Too much for one \(draft.media.label)." }
-        if discs.contains(where: { $0.id == draft.id }) { return "\(draft.id) is already in the archive." }
-        if DiscID.split(draft.id) == nil { return "Use an ID like GOG-014." }
+        let plan: [PlannedDisc]
+        switch draftPlan {
+        case .success(let p): plan = p
+        case .failure(let e): return e.message
+        }
+        if let clash = DiscPlanner.baseIDs(plan).first(where: usedIDs.contains) {
+            return "\(clash) is already in the archive."
+        }
+        return driveBlocker(for: draft.media)
+    }
+
+    /// Nil when the drive holds a blank disc of this type (or burns are simulated).
+    func driveBlocker(for media: Media) -> String? {
         if isSimulating { return nil }
         let s = drive.state
         if !s.hasDrive { return "Connect a burner." }
-        if !s.mediaPresent { return "Insert a blank \(draft.media.label)." }
-        if !s.ready(for: draft.media) {
+        if !s.mediaPresent { return "Insert a blank \(media.label)." }
+        if !s.ready(for: media) {
             if let m = s.media, s.blank { return "The disc in the drive is a \(m.label)." }
-            return "Insert a blank \(draft.media.label)."
+            return "Insert a blank \(media.label)."
         }
         return nil
     }
 
+    private func makeWriter() -> DiscWriter? {
+        if let folder = simulateFolder { return FolderWriter(folder: folder) }
+        if let device = drive.device { return DiscRecordingWriter(device: device) }
+        alert = "No burner found."
+        return nil
+    }
+
     func startBurn() {
-        guard burnBlocker == nil else { return }
-        let writer: DiscWriter
-        if let folder = simulateFolder {
-            writer = FolderWriter(folder: folder)
-        } else if let device = drive.device {
-            writer = DiscRecordingWriter(device: device)
-        } else {
-            alert = "No burner found."
-            return
-        }
-        let plan = BurnPlan(id: draft.id, media: draft.media, speed: draft.speed,
-                            recoveryPercent: draft.recoveryPercent, games: draft.games)
-        let job = BurnJob(plan: plan, par2Available: par2Available)
-        self.job = job
-        job.start(writer: writer, par2: par2, paths: paths) { [weak self] record in
+        guard burnBlocker == nil, case .success(let plan) = draftPlan else { return }
+        session = BurnSession(discs: plan, media: draft.media, speed: draft.speed,
+                              recoveryPercent: draft.effectiveRecovery(par2Available: par2Available))
+        startCurrentDisc()
+    }
+
+    /// Burns the session's current disc (the first, the next after a swap, or a retry).
+    func startCurrentDisc() {
+        guard let session, session.job?.isRunning != true, let writer = makeWriter() else { return }
+        session.start(writer: writer, par2: par2, paths: paths) { [weak self] record in
             self?.upsert(record)
         }
     }
 
-    /// Leave the burn screens. A verified disc clears the draft; a failed one keeps it for another try.
-    func closeJob() {
-        guard let job, !job.isRunning else { return }
-        switch job.outcome {
-        case .verified, .damaged:
-            draft = DiscDraft(id: DiscID.next(after: discs.map(\.id)), media: draft.media,
-                              recoveryPercent: draft.recoveryPercent, speed: draft.speed)
-        default:
-            break
+    /// After a verified set disc: move on and burn the next one.
+    func burnNextDisc() {
+        guard let session, session.waitingForNextDisc, driveBlocker(for: session.media) == nil else { return }
+        session.advance()
+        startCurrentDisc()
+    }
+
+    /// Burn the current disc again on a new blank, after a failure or a bad read-back.
+    func retryDisc() {
+        guard let session, session.job?.isRunning == false else { return }
+        startCurrentDisc()
+    }
+
+    /// Stop between discs and keep the rest of the set for later.
+    func finishLater() {
+        guard let session, session.job?.isRunning != true else { return }
+        let rest = session.remaining
+        savePending(rest.isEmpty ? nil : PendingSet(discs: rest, media: session.media, speed: session.speed,
+                                                     recoveryPercent: session.recoveryPercent, savedAt: Date()))
+        endSession(clearDraft: true)
+    }
+
+    func continuePending() {
+        guard let pending, session == nil else { return }
+        session = BurnSession(discs: pending.discs, media: pending.media, speed: pending.speed, recoveryPercent: pending.recoveryPercent)
+        savePending(nil)
+        screen = .newDisc
+    }
+
+    func discardPending() {
+        savePending(nil)
+        draft.id = nextID()
+    }
+
+    private func savePending(_ set: PendingSet?) {
+        pending = set
+        do {
+            if let set {
+                try FileManager.default.createDirectory(at: paths.root, withIntermediateDirectories: true)
+                try CatalogueStore.encoder.encode(set).write(to: paths.pendingSet, options: .atomic)
+            } else if FileManager.default.fileExists(atPath: paths.pendingSet.path) {
+                try FileManager.default.removeItem(at: paths.pendingSet)
+            }
+        } catch {
+            alert = "Could not save the unfinished set: \(error.localizedDescription)"
         }
-        self.job = nil
+    }
+
+    /// Leave the burn screens. Something burned clears the draft; a failure before any disc keeps it.
+    func closeJob() {
+        guard let session, session.job?.isRunning != true else { return }
+        if session.isSet, !session.remaining.isEmpty, !session.burned.isEmpty {
+            // Part of a set is on disc: keep the rest so it can be finished later.
+            finishLater()
+            return
+        }
+        endSession(clearDraft: !session.burned.isEmpty)
+    }
+
+    private func endSession(clearDraft: Bool) {
+        session = nil
+        if clearDraft {
+            draft = DiscDraft(id: nextID(), media: draft.media, recoveryPercent: draft.recoveryPercent, speed: draft.speed)
+        }
     }
 
     func showInArchive(_ id: String) {

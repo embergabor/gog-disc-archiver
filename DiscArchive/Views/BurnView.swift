@@ -51,9 +51,9 @@ struct BurnView: View {
             .padding(.horizontal, 24)
             .frame(maxWidth: .infinity)
         }
-        .navigationTitle("Burning \(job.plan.id)")
+        .navigationTitle("Burning \(job.plan.label)")
         .navigationSubtitle("\(job.plan.media.label) · \(job.plan.speed)×")
-        .confirmationDialog("Stop \(job.plan.id)?", isPresented: $confirmStop) {
+        .confirmationDialog("Stop \(job.plan.label)?", isPresented: $confirmStop) {
             Button("Stop", role: .destructive) { job.cancel() }
         } message: {
             Text(job.current?.id == .burn

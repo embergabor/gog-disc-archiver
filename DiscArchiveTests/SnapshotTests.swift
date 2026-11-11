@@ -21,6 +21,15 @@ final class SnapshotTests: XCTestCase {
 
         try render(NewDiscView().environment(model), size: CGSize(width: 1060, height: 760), to: folder.appendingPathComponent("new-disc.png"))
 
+        let bins = (1...13).map { SourceFile(relativePath: "setup_the_witcher_3_4.04-\($0).bin", size: 3_970_000_000) }
+        model.draft.games.insert(GameFolder(url: URL(fileURLWithPath: "/g/The Witcher 3 Next Gen"),
+                                            files: [SourceFile(relativePath: "setup_the_witcher_3_4.04.exe", size: 100_000_000)] + bins), at: 0)
+        try render(NewDiscView().environment(model), size: CGSize(width: 1060, height: 1000), to: folder.appendingPathComponent("new-disc-set.png"))
+        if case .success(let plan) = model.draftPlan {
+            let session = BurnSession(discs: plan, media: .bd25, speed: 4, recoveryPercent: 0)
+            try render(SetView(session: session).environment(model), size: CGSize(width: 1060, height: 760), to: folder.appendingPathComponent("set.png"))
+        }
+
         let plan = BurnPlan(id: "GOG-014", media: .bd25, speed: 4, recoveryPercent: 5, games: model.draft.games)
         let job = BurnJob(plan: plan, par2Available: true)
         try render(BurnView(job: job).environment(model), size: CGSize(width: 1060, height: 760), to: folder.appendingPathComponent("burning.png"))

@@ -10,29 +10,34 @@ struct ResultView: View {
             VStack(alignment: .leading, spacing: 22) {
                 switch job.outcome {
                 case .verified(let record):
-                    headline(icon: "checkmark", tone: nil, title: "\(record.id) is safe",
-                             text: "All \(record.allFiles.count) files were read back from the disc and matched their checksums.")
+                    headline(icon: "checkmark", tone: nil, title: "\(record.label) is safe",
+                             text: verifiedText(record))
                     DiscFacts(record: record)
                     nextSteps(record)
                 case .damaged(let record):
                     let bad = record.lastCheck?.bad ?? []
-                    headline(icon: "exclamationmark", tone: .bad, title: "\(record.id) did not read back cleanly",
+                    headline(icon: "exclamationmark", tone: .bad, title: "\(record.label) did not read back cleanly",
                              text: "\(bad.count) of \(record.allFiles.count) files did not match. Don't rely on this disc: burn it again on a new blank.")
                     BadFiles(paths: bad)
                     DiscFacts(record: record)
                     HStack {
                         Button("Show in archive") { model.showInArchive(record.id) }.buttonStyle(PillButtonStyle())
-                        Button("New disc") { model.closeJob() }.buttonStyle(PillButtonStyle(prominent: true))
+                        if inSet {
+                            Button("Finish later") { model.finishLater() }.buttonStyle(PillButtonStyle())
+                            Button("Burn it again on a new blank") { model.retryDisc() }.buttonStyle(PillButtonStyle(prominent: true))
+                        } else {
+                            Button("New disc") { model.closeJob() }.buttonStyle(PillButtonStyle(prominent: true))
+                        }
                     }
                 case .failed(let message):
-                    headline(icon: "xmark", tone: .bad, title: "\(job.plan.id) was not finished", text: message)
+                    headline(icon: "xmark", tone: .bad, title: "\(job.plan.label) was not finished", text: message)
                     stepsSummary
-                    Button("Back to the disc") { model.closeJob() }.buttonStyle(PillButtonStyle(prominent: true))
+                    setOrBackButtons
                 case .cancelled, .none:
                     headline(icon: "minus", tone: .neutral, title: "Stopped", text: job.steps.contains { $0.id == .burn && $0.state == .failed }
                              ? "The burn was stopped part way. That disc can't be used."
                              : "Nothing was written to the disc.")
-                    Button("Back to the disc") { model.closeJob() }.buttonStyle(PillButtonStyle(prominent: true))
+                    setOrBackButtons
                 }
             }
             .frame(maxWidth: 680, alignment: .leading)
@@ -40,13 +45,30 @@ struct ResultView: View {
             .padding(.horizontal, 24)
             .frame(maxWidth: .infinity)
         }
-        .navigationTitle(job.plan.id)
+        .navigationTitle(job.plan.label)
         .navigationSubtitle(subtitle)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button("New disc") { model.closeJob() }
                     .buttonStyle(PillButtonStyle())
             }
+        }
+    }
+
+    /// Part of a multi-disc burn with discs still to go.
+    private var inSet: Bool {
+        guard let session = model.session else { return false }
+        return session.isSet && !session.isLast
+    }
+
+    @ViewBuilder private var setOrBackButtons: some View {
+        if inSet {
+            HStack {
+                Button("Finish later") { model.finishLater() }.buttonStyle(PillButtonStyle())
+                Button("Try again on a new blank") { model.retryDisc() }.buttonStyle(PillButtonStyle(prominent: true))
+            }
+        } else {
+            Button("Back to the disc") { model.closeJob() }.buttonStyle(PillButtonStyle(prominent: true))
         }
     }
 
@@ -76,6 +98,13 @@ struct ResultView: View {
         }
     }
 
+    private func verifiedText(_ record: DiscRecord) -> String {
+        let base = "All \(record.allFiles.count) files were read back from the disc and matched their checksums."
+        guard let session = model.session, session.isSet else { return base }
+        let ok = session.burned.values.filter { $0.lastCheck?.ok == true }.count
+        return base + " That finishes the set: \(ok) of \(session.discs.count) discs verified."
+    }
+
     private var stepsSummary: some View {
         Card {
             ForEach(job.steps) { step in
@@ -102,7 +131,7 @@ struct ResultView: View {
         Card {
             Text("Next").font(.system(size: 15, weight: .bold))
             HStack(spacing: 12) {
-                (Text("Write ") + Text(record.id).font(Theme.mono(13)) + Text(" on the clear hub ring with a disc-safe marker, print a cover for its case and store it upright."))
+                (Text("Write ") + Text(record.label).font(Theme.mono(13)) + Text(" on the clear hub ring with a disc-safe marker, print a cover for its case and store it upright."))
                     .foregroundStyle(Theme.muted)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer()

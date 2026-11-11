@@ -5,8 +5,12 @@ Design canvas: https://claude.ai/artifact/7RWSCDsxvUxja4FTYAL93U
 
 ## What v0.1 does
 
-- **New disc:** drop game folders, pick the media (DVD+R, DVD+R DL, BD-R 25/50, BDXL 100), see what fits.
-  One disc at a time; games that need several discs come later.
+- **New disc:** drop game folders, pick the media (DVD+R, DVD+R DL, BD-R 25/50, BDXL 100), see the plan.
+  Games that don't fit are split over several discs: files are never cut in half, a game too big for one
+  disc gets its own discs under one ID (`GOG-014 1/3` … `3/3`, volumes `GOG_014_1` …) that hold only that
+  game, and the other games are packed together on discs of their own. Between discs the app asks for the
+  next blank and starts by itself when one is inserted; **Finish later** keeps the rest of the set
+  (`~/Archive/pending.json`) to continue from the New disc screen.
 - **Burn:** checksums → recovery data → disc layout → burn → read back.
   - SHA-256 for every file (`_archive/checksums.sha256`, `shasum -a 256 -c` compatible).
   - par2 recovery data per game (5% or 10%), if `par2` is installed (`brew install par2`).
@@ -58,5 +62,5 @@ macOS 14+, no App Sandbox (it needs the burner and `par2`), signed with the Appl
 
 ## Not yet
 
-Games split over several discs, second copy,
+Second copy,
 repair from recovery data inside the app. Not yet tried with a real burner and blank disc.

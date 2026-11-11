@@ -71,7 +71,7 @@ struct ArchiveView: View {
         let q = search.trimmingCharacters(in: .whitespaces)
         guard !q.isEmpty else { return sorted }
         return sorted.filter { disc in
-            disc.id.localizedCaseInsensitiveContains(q) || disc.games.contains { $0.folder.localizedCaseInsensitiveContains(q) || $0.title.localizedCaseInsensitiveContains(q) }
+            disc.label.localizedCaseInsensitiveContains(q) || disc.games.contains { $0.folder.localizedCaseInsensitiveContains(q) || $0.title.localizedCaseInsensitiveContains(q) }
         }
     }
 }
@@ -83,7 +83,7 @@ private struct DiscRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(disc.id).font(Theme.mono(13))
+                Text(disc.label).font(Theme.mono(13))
                 Text("\(disc.media.label) · \(DateText.day(disc.burnedAt))")
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.secondary)
@@ -114,7 +114,7 @@ private struct DiscDetail: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 HStack(spacing: 12) {
-                    Text(disc.id).font(Theme.mono(28)).tracking(2)
+                    Text(disc.label).font(Theme.mono(28)).tracking(2)
                     StatusPill(text: disc.health().label, tone: disc.health().tone)
                 }
                 Text("\(disc.media.longName) · burned \(DateText.day(disc.burnedAt)) · \(ByteText.gb(disc.gameBytes))")
@@ -177,7 +177,7 @@ private struct DiscDetail: View {
             }
             if let job, job.isRunning {
                 if job.waitingForDisc {
-                    Text("Insert \(disc.id) (volume \(disc.volumeName)). The check starts as soon as it appears in the Finder.")
+                    Text("Insert \(disc.label) (volume \(disc.volumeName)). The check starts as soon as it appears in the Finder.")
                         .foregroundStyle(Theme.muted)
                 } else {
                     ProgressView(value: job.fraction).tint(Theme.ink)
@@ -200,7 +200,7 @@ private struct DiscDetail: View {
     }
 
     private func cardTitle(_ job: CheckJob?) -> String {
-        if let job, job.isRunning { return "Checking \(disc.id)" }
+        if let job, job.isRunning { return "Checking \(disc.label)" }
         if let last = disc.lastCheck { return "Last read · \(DateText.day(last.date))" }
         return "Never read back"
     }

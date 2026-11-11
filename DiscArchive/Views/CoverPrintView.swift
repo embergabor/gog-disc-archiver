@@ -86,7 +86,7 @@ struct CoverPrintView: View {
                             Toggle(isOn: Binding(get: { selected.contains(disc.id) },
                                                  set: { on in if on { selected.insert(disc.id) } else { selected.remove(disc.id) } })) {
                                 HStack(spacing: 8) {
-                                    Text(disc.id).font(Theme.mono(12))
+                                    Text(disc.label).font(Theme.mono(12))
                                     Text(disc.games.map(\.title).joined(separator: ", "))
                                         .font(.system(size: 11))
                                         .foregroundStyle(Theme.secondary)
