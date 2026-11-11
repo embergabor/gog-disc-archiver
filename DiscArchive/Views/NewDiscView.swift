@@ -109,7 +109,8 @@ struct NewDiscView: View {
             .padding(.vertical, 14)
             Divider().overlay(Theme.rowDivider)
             ForEach(model.draft.games) { game in
-                GameRow(game: game, thumbnail: model.thumbnails[game.url], tag: tags[game.url]) { model.remove(game) }
+                GameRow(game: game, thumbnail: model.thumbnails[game.url], tag: tags[game.url],
+                        edition: Binding(get: { game.edition ?? "" }, set: { model.setEdition($0, for: game) })) { model.remove(game) }
                 Divider().overlay(Theme.rowDivider)
             }
             dropZone
@@ -151,6 +152,7 @@ private struct GameRow: View {
     var game: GameFolder
     var thumbnail: NSImage?
     var tag: String?
+    @Binding var edition: String
     var remove: () -> Void
 
     var body: some View {
@@ -166,6 +168,11 @@ private struct GameRow: View {
                     .lineLimit(1)
             }
             Spacer()
+            TextField("Edition", text: $edition, prompt: Text("Edition, e.g. Next Gen"))
+                .textFieldStyle(.roundedBorder)
+                .font(.system(size: 12))
+                .frame(width: 150)
+                .help("Your own label for this release, shown in the archive and on covers")
             if let tag {
                 Text(tag)
                     .font(.system(size: 11, weight: .semibold))
@@ -194,6 +201,7 @@ private struct GameRow: View {
     private var detail: String {
         var parts: [String] = []
         if let byline = game.info?.byline, !byline.isEmpty { parts.append(byline) }
+        if let v = game.version { parts.append("v" + v.replacingOccurrences(of: "_", with: " ")) }
         parts += game.platforms
         parts.append(ByteText.files(game.files.count))
         if game.lookedUp && game.info == nil { parts.append("not found on GOG") }

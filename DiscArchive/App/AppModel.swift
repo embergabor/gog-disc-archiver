@@ -140,7 +140,7 @@ final class AppModel {
     private func lookUp(_ game: GameFolder) {
         let service = infoService
         Task {
-            let info = await service.lookup(setupFile: game.setupFile, folderName: game.name)
+            let info = await service.lookup(setupFile: game.setupFile, productName: game.installer?.productName, folderName: game.name)
             if let i = draft.games.firstIndex(where: { $0.url == game.url }) {
                 draft.games[i].info = info
                 draft.games[i].lookedUp = true
@@ -163,6 +163,12 @@ final class AppModel {
             }
         }
         return nil
+    }
+
+    func setEdition(_ text: String, for game: GameFolder) {
+        guard let i = draft.games.firstIndex(where: { $0.url == game.url }) else { return }
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        draft.games[i].edition = trimmed.isEmpty ? nil : trimmed
     }
 
     func remove(_ game: GameFolder) {

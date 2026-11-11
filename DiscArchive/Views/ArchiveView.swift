@@ -71,7 +71,7 @@ struct ArchiveView: View {
         let q = search.trimmingCharacters(in: .whitespaces)
         guard !q.isEmpty else { return sorted }
         return sorted.filter { disc in
-            disc.label.localizedCaseInsensitiveContains(q) || disc.games.contains { $0.folder.localizedCaseInsensitiveContains(q) || $0.title.localizedCaseInsensitiveContains(q) }
+            disc.label.localizedCaseInsensitiveContains(q) || disc.games.contains { $0.folder.localizedCaseInsensitiveContains(q) || $0.title.localizedCaseInsensitiveContains(q) || ($0.edition ?? "").localizedCaseInsensitiveContains(q) }
         }
     }
 }
@@ -139,7 +139,7 @@ private struct DiscDetail: View {
                             BoxArt(image: model.cachedPortrait(game.info), width: 28)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(game.title).font(.system(size: 13, weight: .semibold))
-                                Text(([game.info?.byline].compactMap { $0 }.filter { !$0.isEmpty } + game.platforms + [ByteText.files(game.files.count)]).joined(separator: " · "))
+                                Text(([game.releaseText, game.info?.byline].compactMap { $0 }.filter { !$0.isEmpty } + game.platforms + [ByteText.files(game.files.count)]).joined(separator: " · "))
                                     .font(.system(size: 12))
                                     .foregroundStyle(Theme.secondary)
                             }

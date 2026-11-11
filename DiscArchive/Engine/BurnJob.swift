@@ -223,7 +223,7 @@ final class BurnJob {
                     }
                     files.append(FileRecord(path: game.name + "/" + file.relativePath, size: file.size, sha256: hash))
                 }
-                records.append(GameRecord(folder: game.name, platforms: game.platforms, files: files, version: game.version, info: game.info))
+                records.append(GameRecord(folder: game.name, platforms: game.platforms, files: files, version: game.version, info: game.info, edition: game.edition))
             }
             return records
         }.value

@@ -11,26 +11,53 @@ struct GameInfoService: Sendable {
 
     // MARK: - Lookup
 
-    /// Looks up a game folder: first by its installer's name, then by the folder name.
-    func lookup(setupFile: String?, folderName: String) async -> GameInfo? {
+    /// Looks up a game folder by, in order: its installer's file name, the product name inside the
+    /// installer, and the folder name. GOG renames games ("Game of the Year Edition" became
+    /// "Remastered"), so shorter search terms are tried too, but a match must still be exact.
+    func lookup(setupFile: String?, productName: String? = nil, folderName: String) async -> GameInfo? {
         var names: [String] = []
         if let setupFile { names.append(InstallerName.parse(setupFile).name.replacingOccurrences(of: "_", with: " ")) }
+        if let productName { names.append(productName) }
         names.append(folderName)
+        names = names.filter { !InstallerName.normalize($0).isEmpty }
         for name in names {
-            let key = InstallerName.normalize(name)
-            guard !key.isEmpty else { continue }
-            if let cached = cached(key) { return cached }
-            if let found = try? await catalogMatch(name) {
+            if let cached = cached(InstallerName.normalize(name)) { return cached }
+        }
+        var tried = Set<String>()
+        for name in names {
+            for term in Self.searchTerms(name) where tried.insert(term.lowercased()).inserted {
+                guard let found = try? await catalogMatch(term: term, names: names) else { continue }
                 var info = found
                 info.summary = try? await summary(gogID: info.gogID)
                 var titles = [info.title]
                 if let setupFile { titles.append(InstallerName.title(setupFile)) }
+                if let productName { titles.append(productName) }
                 info.steamAppID = await steamMatch(titles: titles)
-                store(info, key: key)
+                for n in names { store(info, key: InstallerName.normalize(n)) }
                 return info
             }
         }
         return nil
+    }
+
+    /// The full name, the part before the first " - " / ":" / "—", and the first four words.
+    static func searchTerms(_ name: String) -> [String] {
+        let clean = name.replacingOccurrences(of: "_", with: " ").trimmingCharacters(in: .whitespaces)
+        var terms = [clean]
+        let base = Self.baseTitle(clean)
+        if base != clean { terms.append(base) }
+        let words = clean.split(separator: " ").filter { $0 != "-" }
+        if words.count > 4 { terms.append(words.prefix(4).joined(separator: " ")) }
+        return terms
+    }
+
+    /// "The Witcher 3: Wild Hunt — Remastered" → "The Witcher 3: Wild Hunt"; also cuts at " - " and " – ".
+    static func baseTitle(_ title: String) -> String {
+        var s = title
+        for sep in [" — ", " – ", " - "] {
+            if let r = s.range(of: sep) { s = String(s[..<r.lowerBound]) }
+        }
+        return s.trimmingCharacters(in: .whitespaces)
     }
 
     struct CatalogProduct: Decodable {
@@ -60,6 +87,12 @@ struct GameInfoService: Sendable {
     }
 
     func catalogMatch(_ name: String) async throws -> GameInfo? {
+        try await catalogMatch(term: name, names: [name])
+    }
+
+    /// Searches GOG for `term` and returns the product whose slug or title exactly matches any of `names`.
+    func catalogMatch(term: String, names: [String]) async throws -> GameInfo? {
+        let name = term
         var parts = URLComponents(string: "https://catalog.gog.com/v1/catalog")!
         parts.queryItems = [
             URLQueryItem(name: "limit", value: "8"),
@@ -69,7 +102,7 @@ struct GameInfoService: Sendable {
         ]
         let data = try await Self.get(parts.url!)
         let page = try JSONDecoder().decode(CatalogPage.self, from: data)
-        guard let p = Self.matchCatalog(name, products: page.products) else { return nil }
+        guard let p = names.lazy.compactMap({ Self.matchCatalog($0, products: page.products) }).first else { return nil }
         return GameInfo(gogID: p.id,
                         title: InstallerName.cleanStoreTitle(p.title ?? name),
                         developers: (p.developers ?? []).map(InstallerName.cleanStoreTitle),
@@ -109,7 +142,8 @@ struct GameInfoService: Sendable {
     /// Steam's search misses some full names ("Disco Elysium - The Final Cut"), so the part before
     /// " - " or ":" is searched too, but the match itself stays exact.
     func steamMatch(titles: [String]) async -> Int? {
-        let wanted = Set(titles.map(InstallerName.normalize).filter { !$0.isEmpty })
+        // Editions share the base game's Steam page: "… — Remastered" also matches "The Witcher 3: Wild Hunt".
+        let wanted = Set((titles + titles.map(Self.baseTitle)).map(InstallerName.normalize).filter { !$0.isEmpty })
         var terms: [String] = []
         for title in titles {
             terms.append(title)

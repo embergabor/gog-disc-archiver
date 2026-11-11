@@ -9,6 +9,7 @@ func mm(_ value: CGFloat) -> CGFloat { value * 72 / 25.4 }
 struct CoverGame: Identifiable {
     var id: String
     var title: String
+    var edition: String?
     var byline: String
     var genres: [String]
     var details: String
@@ -33,7 +34,8 @@ struct CoverDisc: Identifiable {
     var backdrop: NSImage?
 
     var spineText: String {
-        games.count == 1 ? games[0].title : "\(games.count) games"
+        guard games.count == 1 else { return "\(games.count) games" }
+        return games[0].title + (games[0].edition.map { " · " + $0 } ?? "")
     }
 }
 

@@ -17,6 +17,14 @@ struct GameRecord: Codable, Hashable, Identifiable, Sendable {
     var version: String? = nil
     /// GOG catalog data, when the game was found there.
     var info: GameInfo? = nil
+    /// The user's label for this release, e.g. "Next Gen".
+    var edition: String? = nil
+
+    /// "Next Gen · v4.04b"
+    var releaseText: String? {
+        let parts = [edition, version.map { "v" + $0.replacingOccurrences(of: "_", with: " ") }].compactMap { $0 }.filter { !$0.isEmpty }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
 
     var bytes: Int64 { files.reduce(0) { $0 + $1.size } }
     var title: String { info?.title ?? folder }

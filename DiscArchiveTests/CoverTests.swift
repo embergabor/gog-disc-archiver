@@ -101,3 +101,40 @@ final class CoverSnapshotTests: XCTestCase {
         }
     }
 }
+
+final class InstallerInfoTests: XCTestCase {
+    private func utf16(_ s: String) -> [UInt8] { s.utf16.flatMap { [UInt8($0 & 0xFF), UInt8($0 >> 8)] } }
+
+    func testReadsVersionInfoStrings() {
+        var bytes: [UInt8] = Array(repeating: 0x41, count: 64)
+        bytes += utf16("ProductName") + [0, 0, 0, 0] + utf16("The Witcher 3 - Wild Hunt - Complete Edition") + [0, 0]
+        bytes += utf16("ProductVersion") + [0, 0] + utf16("4.04b.[57606063263997132]") + [0, 0]
+        let info = InstallerVersionInfo.parse(Data(bytes))
+        XCTAssertEqual(info.productName, "The Witcher 3 - Wild Hunt - Complete Edition")
+        XCTAssertEqual(info.productVersion, "4.04b")
+    }
+
+    func testSearchTermsForRenamedGames() {
+        XCTAssertEqual(GameInfoService.searchTerms("the witcher 3 wild hunt - game of the year edition"),
+                       ["the witcher 3 wild hunt - game of the year edition", "the witcher 3 wild hunt", "the witcher 3 wild"])
+        XCTAssertEqual(GameInfoService.baseTitle("The Witcher 3: Wild Hunt — Remastered"), "The Witcher 3: Wild Hunt")
+    }
+}
+
+/// Live check against the user's Witcher 3 download, when it is there. Network.
+@MainActor
+final class LiveLookupTests: XCTestCase {
+    func testWitcher3() async throws {
+        guard let out = ProcessInfo.processInfo.environment["SNAPSHOT_DIR"] else { throw XCTSkip("SNAPSHOT_DIR not set") }
+        let folder = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Downloads/GOG/The Witcher 3 Wild Hunt")
+        guard FileManager.default.fileExists(atPath: folder.path) else { throw XCTSkip("no Witcher 3 download") }
+        let game = try GameFolder.scan(folder)
+        print("installer", game.installer as Any, "version", game.version as Any)
+        let service = GameInfoService(cacheRoot: URL(fileURLWithPath: out).appendingPathComponent("Info"))
+        let info = await service.lookup(setupFile: game.setupFile, productName: game.installer?.productName, folderName: game.name)
+        print("lookup", info?.title as Any, info?.gogID as Any, "steam", info?.steamAppID as Any)
+        XCTAssertNotNil(info)
+        XCTAssertNotNil(info?.steamAppID)
+        XCTAssertEqual(game.version, "4.04b")
+    }
+}

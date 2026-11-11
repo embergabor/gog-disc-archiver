@@ -32,10 +32,11 @@ enum CoverBuilder {
             if portrait == nil, let wide {
                 portrait = MadeCover.from(wide: wide, title: game.title)
             }
-            var details = game.platforms
-            if let v = game.version { details.append("v" + v.replacingOccurrences(of: "_", with: " ")) }
+            var details: [String] = []
+            if let release = game.releaseText { details.append(release) }
+            details += game.platforms
             details.append(ByteText.gb(game.bytes))
-            games.append(CoverGame(id: game.folder, title: game.title, byline: game.info?.byline ?? "",
+            games.append(CoverGame(id: game.folder, title: game.title, edition: game.edition, byline: game.info?.byline ?? "",
                                    genres: game.info?.genres ?? [], details: details.joined(separator: " · "),
                                    summary: game.info?.summary, portrait: portrait, wide: wide))
         }
@@ -57,7 +58,8 @@ enum CoverBuilder {
                 let files = DiscPlanner.installOrder(record.games[0].files.map { SourceFile(relativePath: String($0.path.dropFirst(record.games[0].folder.count + 1)), size: $0.size) })
                     .map(\.relativePath)
                 let range = files.count > 1 ? "\(files.first!) … \(files.last!)" : (files.first ?? "")
-                games[i].details = "Part \(part) of \(total) · " + range + " · " + ByteText.gb(record.gameBytes)
+                let release = record.games[0].releaseText.map { $0 + " · " } ?? ""
+                games[i].details = release + "Part \(part) of \(total) · " + range + " · " + ByteText.gb(record.gameBytes)
             }
         } else {
             facts.append(("Install", "copy a game's folder to your drive and run setup_*.exe"))

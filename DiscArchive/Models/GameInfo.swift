@@ -80,3 +80,48 @@ enum InstallerName {
             .trimmingCharacters(in: .whitespaces)
     }
 }
+
+/// The Windows version info inside a GOG installer: "The Witcher 3 - Wild Hunt - Complete Edition", "4.04b".
+struct InstallerVersionInfo: Codable, Hashable, Sendable {
+    var productName: String?
+    var productVersion: String?
+
+    /// Reads the setup file's version resource. The program part of an installer is small and comes first,
+    /// so only the first 32 MB are read even for single-file installers.
+    static func read(_ url: URL) -> InstallerVersionInfo? {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        defer { try? handle.close() }
+        guard let data = try? handle.read(upToCount: 32 << 20), data.count > 2 else { return nil }
+        let info = parse(data)
+        return info.productName == nil && info.productVersion == nil ? nil : info
+    }
+
+    static func parse(_ data: Data) -> InstallerVersionInfo {
+        var info = InstallerVersionInfo()
+        info.productName = value(for: "ProductName", in: data)
+        if let v = value(for: "ProductVersion", in: data) {
+            // GOG appends a build id: "4.04b.[57606063263997132]".
+            let cleaned = v.replacingOccurrences(of: #"\.?\[[^\]]*\]$"#, with: "", options: .regularExpression)
+            info.productVersion = cleaned.isEmpty ? nil : cleaned
+        }
+        return info
+    }
+
+    /// A version-info string: the UTF-16 key, padding, then the UTF-16 value up to its terminating zero.
+    private static func value(for key: String, in data: Data) -> String? {
+        let needle = Data((key + "\0").utf16.flatMap { [UInt8($0 & 0xFF), UInt8($0 >> 8)] })
+        guard let range = data.range(of: needle) else { return nil }
+        var i = range.upperBound
+        while i + 1 < data.count, data[i] == 0, data[i + 1] == 0 { i += 2 }
+        var units: [UInt16] = []
+        while i + 1 < data.count {
+            let unit = UInt16(data[i]) | UInt16(data[i + 1]) << 8
+            if unit == 0 { break }
+            units.append(unit)
+            i += 2
+            if units.count > 300 { break }
+        }
+        let text = String(decoding: units, as: UTF16.self).trimmingCharacters(in: .whitespaces)
+        return text.isEmpty ? nil : text
+    }
+}

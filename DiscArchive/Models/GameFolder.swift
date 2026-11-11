@@ -15,9 +15,15 @@ struct GameFolder: Identifiable, Hashable, Codable, Sendable {
     var info: GameInfo? = nil
     /// Set once a lookup has finished, found or not.
     var lookedUp = false
+    /// Name and version from the installer's own version info.
+    var installer: InstallerVersionInfo? = nil
+    /// The user's label for this release, e.g. "Next Gen".
+    var edition: String? = nil
 
     var setupFile: String? { InstallerName.setupFile(in: files.map(\.relativePath)) }
+    /// The installer's version info if it has one, else the version in its file name.
     var version: String? {
+        if let v = installer?.productVersion { return v }
         guard let setupFile else { return nil }
         let v = InstallerName.parse(setupFile).version
         return v.isEmpty ? nil : v
@@ -77,6 +83,10 @@ struct GameFolder: Identifiable, Hashable, Codable, Sendable {
         }
         guard !files.isEmpty else { throw ScanError.empty(url.lastPathComponent) }
         files.sort { $0.relativePath.localizedStandardCompare($1.relativePath) == .orderedAscending }
-        return GameFolder(url: url, files: files)
+        var game = GameFolder(url: url, files: files)
+        if let setup = game.setupFile {
+            game.installer = InstallerVersionInfo.read(url.appendingPathComponent(setup))
+        }
+        return game
     }
 }
