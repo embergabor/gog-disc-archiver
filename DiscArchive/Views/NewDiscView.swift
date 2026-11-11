@@ -283,6 +283,32 @@ private struct SpaceCard: View {
             } else {
                 SpaceBar(games: games, recovery: recovery, capacity: cap, height: 14)
             }
+            if model.optimiseSaving > 0 || model.orderBeforeOptimise != nil {
+                HStack(spacing: 10) {
+                    Image(systemName: "rectangle.stack")
+                        .foregroundStyle(Theme.ink)
+                    if model.orderBeforeOptimise != nil {
+                        Text("Reordered for the fewest discs. Games on each disc keep your order.")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Theme.muted)
+                        Spacer()
+                        Button("Undo") { withAnimation { model.undoOptimise() } }
+                            .buttonStyle(PillButtonStyle())
+                    } else {
+                        let saving = model.optimiseSaving
+                        Text("Discs follow your list order. Reordering the list would save \(saving == 1 ? "1 disc" : "\(saving) discs").")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Theme.muted)
+                        Spacer()
+                        Button("Optimise order") { withAnimation { model.optimiseOrder() } }
+                            .buttonStyle(PillButtonStyle(prominent: true))
+                            .help("Reorders the games in Contents so they fit on the fewest discs. You can undo it.")
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Theme.tint, in: RoundedRectangle(cornerRadius: 10))
+            }
             HStack(spacing: 18) {
                 legend(Theme.accent, "Games \(ByteText.gb(games))")
                 legend(Theme.accent.opacity(0.45), model.par2Available ? "Recovery data \(ByteText.gb(recovery))" : "Recovery data off (par2 not installed)")
@@ -293,7 +319,7 @@ private struct SpaceCard: View {
             .font(.system(size: 12))
             .foregroundStyle(Theme.muted)
             if plan.count > 1 {
-                Label("A game too big for one disc gets discs of its own under one ID (1/5 … 5/5), and its last disc is never topped up with other games. Files are never cut in half. Each disc has its own checksums and recovery data. To install a split game, copy its folder from every disc into one folder.",
+                Label("Discs fill in your list order: when the next game doesn't fit, a new disc starts. A game too big for one disc gets discs of its own under one ID (1/5 … 5/5), and its last disc is never topped up with other games. Files are never cut in half. Each disc has its own checksums and recovery data. To install a split game, copy its folder from every disc into one folder.",
                       systemImage: "info.circle")
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.muted)

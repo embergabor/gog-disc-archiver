@@ -77,43 +77,68 @@ enum DiscPlanner {
             return id
         }
 
-        // Games too big for one disc: each gets its own run of discs.
-        for game in games where !fits(game.totalBytes, games: 1) {
-            var parts: [[SourceFile]] = [[]]
-            var used: Int64 = 0
-            for file in installOrder(game.files) {
-                if !parts[parts.count - 1].isEmpty && !fits(used + file.size, games: 1) {
-                    parts.append([])
-                    used = 0
+        // In list order: games fill the current disc; the next game that doesn't fit starts a new one.
+        // A game too big for any disc closes the current disc and gets its own run of discs there.
+        var current: [GameFolder] = []
+        func closeCurrent() {
+            guard !current.isEmpty else { return }
+            discs.append(PlannedDisc(id: takeID(), games: current))
+            current = []
+        }
+        for game in games {
+            if !fits(game.totalBytes, games: 1) {
+                closeCurrent()
+                let parts = split(game, fits: fits)
+                let setID = takeID()
+                for (i, files) in parts.enumerated() {
+                    var piece = game
+                    piece.files = files
+                    discs.append(PlannedDisc(id: DiscID.setDiscKey(setID: setID, part: i + 1, of: parts.count),
+                                             setID: setID, part: i + 1, partCount: parts.count, games: [piece]))
                 }
-                parts[parts.count - 1].append(file)
-                used += file.size
-            }
-            let setID = takeID()
-            for (i, files) in parts.enumerated() {
-                var piece = game
-                piece.files = files
-                discs.append(PlannedDisc(id: DiscID.setDiscKey(setID: setID, part: i + 1, of: parts.count),
-                                         setID: setID, part: i + 1, partCount: parts.count, games: [piece]))
-            }
-        }
-
-        // Everything else: whole games, largest first, on the first disc with room.
-        var shared: [[GameFolder]] = []
-        for game in games.filter({ fits($0.totalBytes, games: 1) }).sorted(by: { $0.totalBytes > $1.totalBytes }) {
-            if let i = shared.firstIndex(where: { group in
-                fits(group.reduce(0) { $0 + $1.totalBytes } + game.totalBytes, games: group.count + 1)
-            }) {
-                shared[i].append(game)
+            } else if fits(current.reduce(0) { $0 + $1.totalBytes } + game.totalBytes, games: current.count + 1) {
+                current.append(game)
             } else {
-                shared.append([game])
+                closeCurrent()
+                current = [game]
             }
         }
-        for group in shared {
-            let ordered = games.filter { g in group.contains { $0.url == g.url } }
-            discs.append(PlannedDisc(id: takeID(), games: ordered))
-        }
+        closeCurrent()
         return discs
+    }
+
+    /// A big game's files in install order, cut into disc-sized runs.
+    private static func split(_ game: GameFolder, fits: (Int64, Int) -> Bool) -> [[SourceFile]] {
+        var parts: [[SourceFile]] = [[]]
+        var used: Int64 = 0
+        for file in installOrder(game.files) {
+            if !parts[parts.count - 1].isEmpty && !fits(used + file.size, 1) {
+                parts.append([])
+                used = 0
+            }
+            parts[parts.count - 1].append(file)
+            used += file.size
+        }
+        return parts
+    }
+
+    /// The list reordered to need the fewest discs: games too big for one disc first, then the others
+    /// grouped largest-first onto the first disc with room. Within a disc, games keep the user's order.
+    /// Planning this order in list order gives exactly those discs.
+    static func optimisedOrder(games: [GameFolder], media: Media, percent: Int) -> [GameFolder] {
+        let limit = media.usable
+        func fits(_ data: Int64, games n: Int) -> Bool { usedBytes(data, games: n, percent: percent) <= limit }
+        let big = games.filter { !fits($0.totalBytes, games: 1) }
+        var groups: [[GameFolder]] = []
+        for game in games.filter({ fits($0.totalBytes, games: 1) }).sorted(by: { $0.totalBytes > $1.totalBytes }) {
+            if let i = groups.firstIndex(where: { fits($0.reduce(0) { $0 + $1.totalBytes } + game.totalBytes, games: $0.count + 1) }) {
+                groups[i].append(game)
+            } else {
+                groups.append([game])
+            }
+        }
+        let userIndex = Dictionary(uniqueKeysWithValues: games.enumerated().map { ($1.url, $0) })
+        return big + groups.flatMap { group in group.sorted { userIndex[$0.url, default: 0] < userIndex[$1.url, default: 0] } }
     }
 
     /// The installer first (so disc 1 starts the install), then the parts in number order.

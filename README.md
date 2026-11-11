@@ -8,7 +8,8 @@ Design canvas: https://claude.ai/artifact/7RWSCDsxvUxja4FTYAL93U
 - **New disc:** drop game folders, pick the media (DVD+R, DVD+R DL, BD-R 25/50, BDXL 100), see the plan.
   Games that don't fit are split over several discs: files are never cut in half, a game too big for one
   disc gets its own discs under one ID (`GOG-014 1/3` … `3/3`, volumes `GOG_014_1` …) that hold only that
-  game, and the other games are packed together on discs of their own. Between discs the app asks for the
+  game. Discs fill in your list order (drag to reorder); **Optimise order** rearranges the list for the
+  fewest discs when that saves one, with Undo. Between discs the app asks for the
   next blank and starts by itself when one is inserted; **Finish later** keeps the rest of the set
   (`~/Archive/pending.json`) to continue from the New disc screen.
 - **Burn:** checksums → recovery data → disc layout → burn → read back.

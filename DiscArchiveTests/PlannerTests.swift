@@ -6,32 +6,47 @@ final class PlannerTests: XCTestCase {
         GameFolder(url: URL(fileURLWithPath: "/games/\(name)"), files: files.map { SourceFile(relativePath: $0.0, size: $0.1) })
     }
 
-    /// A Witcher-sized game gets its own discs; small games share another; files stay whole.
-    func testBigGameGetsItsOwnDiscs() throws {
+    /// List order: a Witcher-sized game gets its own discs where it sits in the list; files stay whole.
+    func testBigGameGetsItsOwnDiscsInListOrder() throws {
         let bins = (1...13).map { ("setup_the_witcher_3_4.04-\($0).bin", Int64(3_970_000_000)) }
         let witcher = game("The Witcher 3", bins + [("setup_the_witcher_3_4.04.exe", 100_000_000)])
         let small = [game("Fallout 2", [("setup_fallout2.exe", 600_000_000)]), game("Heroes 3", [("setup_h3.exe", 1_000_000_000)])]
+        let games = [small[0], witcher, small[1]]
 
-        let discs = try DiscPlanner.plan(games: [small[0], witcher, small[1]], media: .bd25, percent: 5, firstID: "GOG-014")
+        let discs = try DiscPlanner.plan(games: games, media: .bd25, percent: 5, firstID: "GOG-014")
+        XCTAssertEqual(discs.map(\.label), ["GOG-014", "GOG-015 1/3", "GOG-015 2/3", "GOG-015 3/3", "GOG-016"])
+        XCTAssertEqual(discs[0].games.map(\.name), ["Fallout 2"])
+        XCTAssertEqual(discs[4].games.map(\.name), ["Heroes 3"])
 
-        let set = discs.filter { $0.setID == "GOG-014" }
-        XCTAssertEqual(set.count, 3)
-        XCTAssertEqual(set.map(\.part), [1, 2, 3])
+        let set = discs.filter { $0.setID == "GOG-015" }
         XCTAssertTrue(set.allSatisfy { $0.partCount == 3 && $0.games.count == 1 && $0.games[0].name == "The Witcher 3" })
         XCTAssertEqual(set[0].games[0].files.first?.relativePath, "setup_the_witcher_3_4.04.exe", "installer first")
         XCTAssertEqual(set[1].games[0].files.first?.relativePath, "setup_the_witcher_3_4.04-6.bin", "parts in number order")
         XCTAssertEqual(set.map { $0.games[0].files.count }.reduce(0, +), 14, "every file once")
         XCTAssertLessThan(set[2].dataBytes, set[0].dataBytes, "last disc is not topped up")
-        XCTAssertEqual(set.map(\.volumeName), ["GOG_014_1", "GOG_014_2", "GOG_014_3"])
-        XCTAssertEqual(set.map(\.label), ["GOG-014 1/3", "GOG-014 2/3", "GOG-014 3/3"])
+        XCTAssertEqual(set.map(\.volumeName), ["GOG_015_1", "GOG_015_2", "GOG_015_3"])
         for disc in discs {
             XCTAssertLessThanOrEqual(DiscPlanner.usedBytes(disc.dataBytes, games: disc.games.count, percent: 5), Media.bd25.usable)
         }
 
-        let shared = discs.filter { $0.setID == nil }
-        XCTAssertEqual(shared.map(\.id), ["GOG-015"])
-        XCTAssertEqual(shared[0].games.map(\.name), ["Fallout 2", "Heroes 3"])
-        XCTAssertEqual(DiscPlanner.baseIDs(discs), ["GOG-014", "GOG-015"])
+        // Optimise puts the big game first and the two small ones together, in the user's order.
+        let better = DiscPlanner.optimisedOrder(games: games, media: .bd25, percent: 5)
+        XCTAssertEqual(better.map(\.name), ["The Witcher 3", "Fallout 2", "Heroes 3"])
+        let fewer = try DiscPlanner.plan(games: better, media: .bd25, percent: 5, firstID: "GOG-014")
+        XCTAssertEqual(fewer.map(\.label), ["GOG-014 1/3", "GOG-014 2/3", "GOG-014 3/3", "GOG-015"])
+        XCTAssertEqual(fewer[3].games.map(\.name), ["Fallout 2", "Heroes 3"])
+    }
+
+    /// Games stay in list order on each disc; Optimise pairs them up to save a disc.
+    func testListOrderAndOptimise() throws {
+        let gb: Int64 = 1_000_000_000
+        let games = [game("A", [("a.exe", 15 * gb)]), game("B", [("b.exe", 15 * gb)]), game("C", [("c.exe", 8 * gb)]), game("D", [("d.exe", 8 * gb)])]
+        let inOrder = try DiscPlanner.plan(games: games, media: .bd25, percent: 0, firstID: "GOG-001")
+        XCTAssertEqual(inOrder.map { $0.games.map(\.name) }, [["A"], ["B", "C"], ["D"]])
+        let better = DiscPlanner.optimisedOrder(games: games, media: .bd25, percent: 0)
+        XCTAssertEqual(better.map(\.name), ["A", "C", "B", "D"])
+        let fewer = try DiscPlanner.plan(games: better, media: .bd25, percent: 0, firstID: "GOG-001")
+        XCTAssertEqual(fewer.map { $0.games.map(\.name) }, [["A", "C"], ["B", "D"]])
     }
 
     func testOneDiscWhenItFits() throws {

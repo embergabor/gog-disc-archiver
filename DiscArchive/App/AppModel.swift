@@ -42,6 +42,8 @@ final class AppModel {
     var session: BurnSession?
     /// A set left part-way with Finish later.
     private(set) var pending: PendingSet?
+    /// The list order before Optimise, for Undo. Cleared by any other change to the list.
+    private(set) var orderBeforeOptimise: [URL]?
     var check: CheckJob?
     var alert: String?
     /// Archive selection.
@@ -132,6 +134,7 @@ final class AppModel {
                         problems.append("A folder named \u{201C}\(game.name)\u{201D} is already on this disc.")
                     } else {
                         draft.games.append(game)
+                        orderBeforeOptimise = nil
                         lookUp(game)
                     }
                 } catch {
@@ -179,6 +182,7 @@ final class AppModel {
 
     func remove(_ game: GameFolder) {
         draft.games.removeAll { $0.id == game.id }
+        orderBeforeOptimise = nil
     }
 
     /// Why Burn is not available, or nil when it is.
@@ -324,6 +328,36 @@ final class AppModel {
         let game = draft.games.remove(at: from)
         let to = draft.games.firstIndex(where: { $0.url == target }) ?? draft.games.count
         draft.games.insert(game, at: to)
+        orderBeforeOptimise = nil
+    }
+
+    /// The list order that needs the fewest discs.
+    private var optimisedGames: [GameFolder] {
+        DiscPlanner.optimisedOrder(games: draft.games, media: draft.media, percent: draft.effectiveRecovery(par2Available: par2Available))
+    }
+
+    /// How many discs Optimise would save (0 when the list order is already as good).
+    var optimiseSaving: Int {
+        guard draft.games.count > 1, case .success(let now) = draftPlan else { return 0 }
+        var trial = draft
+        trial.games = optimisedGames
+        guard case .success(let better) = trial.plan(par2Available: par2Available) else { return 0 }
+        return max(0, now.count - better.count)
+    }
+
+    /// Reorders the list for the fewest discs. Undo puts the user's order back.
+    func optimiseOrder() {
+        guard optimiseSaving > 0 else { return }
+        let before = draft.games.map(\.url)
+        draft.games = optimisedGames
+        orderBeforeOptimise = before
+    }
+
+    func undoOptimise() {
+        guard let before = orderBeforeOptimise else { return }
+        let byURL = Dictionary(uniqueKeysWithValues: draft.games.map { ($0.url, $0) })
+        draft.games = before.compactMap { byURL[$0] }
+        orderBeforeOptimise = nil
     }
 
     // MARK: - Catalogue
