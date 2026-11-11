@@ -712,7 +712,8 @@ enum CoverKind: String, CaseIterable, Identifiable {
     }
 }
 
-/// Corner marks outside the edges, plus optional fold marks at the given x positions.
+/// Corner marks outside the edges, optional fold marks at the given x positions, and a thin
+/// dotted cut line along the trim edge.
 struct CropMarks: View {
     var size: CGSize
     var folds: [CGFloat] = []
@@ -720,6 +721,17 @@ struct CropMarks: View {
     var len: CGFloat = 14
 
     var body: some View {
+        ZStack {
+            // Dotted cut line on the trim edge; light enough to disappear in a slightly inside cut.
+            Rectangle()
+                .stroke(Color(hex: 0x808080), style: StrokeStyle(lineWidth: 0.6, dash: [1.5, 2.5]))
+                .frame(width: size.width, height: size.height)
+            marks
+        }
+        .frame(width: size.width, height: size.height)
+    }
+
+    private var marks: some View {
         Path { p in
             let w = size.width, h = size.height
             for (x, y, dx, dy) in [(0.0, 0.0, -1.0, -1.0), (w, 0.0, 1.0, -1.0), (0.0, h, -1.0, 1.0), (w, h, 1.0, 1.0)] {
