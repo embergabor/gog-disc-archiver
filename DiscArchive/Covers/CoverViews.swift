@@ -280,18 +280,27 @@ struct BackPanel: View {
     private var room: CGFloat { size.height / BDWrap.panel.height }
     private var count: Int { disc.games.count }
 
-    private enum Style { case full, medium, twoLine, oneLine }
-
-    private var style: Style {
-        let n = CGFloat(count)
-        if n <= 4 * room { return .full }
-        if n <= 6 * room { return .medium }
-        if n <= 11 * room { return .twoLine }
-        return .oneLine
-    }
+    /// From roomiest to tightest. The first layout that fits the panel with the real titles is used.
+    private enum Style { case full, medium, twoLine, wrappedLine, wrappedSmall, oneLine }
 
     var body: some View {
-        let single = count == 1
+        ViewThatFits(in: .vertical) {
+            content(.full)
+            content(.medium)
+            content(.twoLine)
+            content(.wrappedLine)
+            content(.wrappedSmall)
+            content(.oneLine)
+        }
+        .foregroundStyle(CoverStyle.ink)
+        .padding(.horizontal, mm(room < 0.9 ? 6 : 7))
+        .padding(.vertical, mm(room < 0.9 ? 5.5 : 6.5))
+        .frame(width: size.width, height: size.height, alignment: .topLeading)
+        .background(CoverStyle.paper)
+        .clipped()
+    }
+
+    private func content(_ style: Style) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
                 Text(disc.label).font(CoverStyle.mono(room < 0.9 ? 15 : 17)).tracking(1.2)
@@ -305,9 +314,11 @@ struct BackPanel: View {
             Rectangle().fill(CoverStyle.ink).frame(height: 1.5).padding(.top, 6).padding(.bottom, 2)
             ForEach(disc.games) { game in
                 switch style {
-                case .oneLine: oneLineRow(game)
+                case .oneLine: lineRow(game, wrap: false, small: true)
+                case .wrappedLine: lineRow(game, wrap: true, small: false)
+                case .wrappedSmall: lineRow(game, wrap: true, small: true)
                 case .twoLine: twoLineRow(game)
-                case .full, .medium: richRow(game, single: single)
+                case .full, .medium: richRow(game, style: style)
                 }
                 Rectangle().fill(CoverStyle.rule).frame(height: 0.5)
             }
@@ -322,16 +333,10 @@ struct BackPanel: View {
             }
             .font(.system(size: 7))
         }
-        .foregroundStyle(CoverStyle.ink)
-        .padding(.horizontal, mm(room < 0.9 ? 6 : 7))
-        .padding(.vertical, mm(room < 0.9 ? 5.5 : 6.5))
-        .frame(width: size.width, height: size.height, alignment: .topLeading)
-        .background(CoverStyle.paper)
-        .clipped()
     }
 
     /// Cover thumbnail, title, developer and year, genres, details; the description too when alone.
-    private func richRow(_ game: CoverGame, single: Bool) -> some View {
+    private func richRow(_ game: CoverGame, style: Style) -> some View {
         let thumbW: CGFloat = style == .full ? mm(room < 0.9 ? 12 : 15) : mm(8.5)
         return HStack(alignment: .top, spacing: mm(3)) {
             Group {
@@ -344,29 +349,30 @@ struct BackPanel: View {
             .frame(width: thumbW, height: thumbW * 1.5)
             .clipped()
             VStack(alignment: .leading, spacing: 1.5) {
-                Text(game.title).font(.system(size: 9.5, weight: .bold)).lineLimit(2)
+                Text(game.title).font(.system(size: 9.5, weight: .bold))
                     .fixedSize(horizontal: false, vertical: true)
                 if style == .full {
                     if !game.byline.isEmpty {
                         Text(game.byline).font(.system(size: 7.5)).foregroundStyle(CoverStyle.grey)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     if !game.genres.isEmpty {
                         Text(game.genres.prefix(3).joined(separator: " · ")).font(.system(size: 7)).foregroundStyle(CoverStyle.grey)
                     }
                 } else {
                     Text(([game.byline] + game.genres.prefix(2)).filter { !$0.isEmpty }.joined(separator: " · "))
-                        .font(.system(size: 7)).foregroundStyle(CoverStyle.grey).lineLimit(2)
+                        .font(.system(size: 7)).foregroundStyle(CoverStyle.grey)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Text(game.details).font(.system(size: 7)).foregroundStyle(CoverStyle.grey)
-                    .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
-                if single, let summary = game.summary {
+                if count == 1, let summary = game.summary {
                     Text(summary)
                         .font(.system(size: 7.5))
                         .lineSpacing(1)
                         .foregroundStyle(Color(hex: 0x222222))
                         .lineLimit(Int(14 * room))
+                        .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 4)
                 }
             }
@@ -375,24 +381,26 @@ struct BackPanel: View {
         .padding(.vertical, style == .full ? 4 : 3)
     }
 
-    /// Two lines per game, no thumbnail; the second line wraps when the details are long.
+    /// Title on one line, everything else below it, wrapping as needed. No thumbnail.
     private func twoLineRow(_ game: CoverGame) -> some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text(game.title).font(.system(size: 8.5, weight: .bold)).lineLimit(1)
+            Text(game.title).font(.system(size: 8.5, weight: .bold))
+                .fixedSize(horizontal: false, vertical: true)
             Text([game.byline, game.details].filter { !$0.isEmpty }.joined(separator: " · "))
-                .font(.system(size: 6.5)).foregroundStyle(CoverStyle.grey).lineLimit(2)
+                .font(.system(size: 6.5)).foregroundStyle(CoverStyle.grey)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.vertical, 2.5)
     }
 
-    /// Many games: one line each, title in bold.
-    private func oneLineRow(_ game: CoverGame) -> some View {
-        (Text(game.title).font(.system(size: 7.5, weight: .bold))
+    /// Title in bold followed by the details; wraps onto further lines, or is cut to one line as a last resort.
+    private func lineRow(_ game: CoverGame, wrap: Bool, small: Bool) -> some View {
+        (Text(game.title).font(.system(size: small ? 7 : 7.5, weight: .bold))
          + Text("  " + [game.byline, game.details].filter { !$0.isEmpty }.joined(separator: " · "))
-            .font(.system(size: 6.5)).foregroundColor(CoverStyle.grey))
-            .lineLimit(1)
-            .padding(.vertical, 2)
+            .font(.system(size: small ? 6 : 6.5)).foregroundColor(CoverStyle.grey))
+            .lineLimit(wrap ? nil : 1)
+            .fixedSize(horizontal: false, vertical: wrap)
+            .padding(.vertical, small ? 1.2 : 2)
     }
 }
 

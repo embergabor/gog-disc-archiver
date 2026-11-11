@@ -104,11 +104,30 @@ final class BackFitTests: XCTestCase {
     func testBackFitsManyGames() throws {
         guard let out = ProcessInfo.processInfo.environment["COVER_PREVIEW_DIR"] else { throw XCTSkip("COVER_PREVIEW_DIR not set") }
         var row: [AnyView] = []
-        for count in [6, 10, 14] {
+        let real: [(String, String, String)] = [
+            ("Fallout", "Interplay · 1997", "v1.2 · Windows · 0.7 GB"), ("Fallout 2", "Interplay · 1998", "v1.02 GOG v1 · Windows · 0.8 GB"),
+            ("Fallout Tactics", "14° East · 2001", "Windows · 1.8 GB"), ("Fallout 3", "Bethesda Game Studios · 2009", "v1.7.0.3 · Windows · 7.6 GB"),
+            ("Fallout - New Vegas Ultimate Edition", "Obsidian Entertainment · 2010", "v1.4.0.525(a) · Windows · 8.9 GB"),
+            ("Baldur's Gate - Enhanced Edition", "Beamdog · 2013", "v2.7.3.0 · Windows · 4.6 GB"), ("Baldur's Gate II - Enhanced Edition", "Beamdog · 2013", "v2.7.3.0 · Windows · 3.4 GB"),
+            ("Icewind Dale - Enhanced Edition", "Beamdog · 2014", "v2.6.6.0 · Windows · 3.2 GB"), ("Icewind Dale 2 Complete", "Black Isle Studios · 2002", "v2.01 fixes · Windows · 1.5 GB"),
+            ("Planescape - Torment - Enhanced Edition", "Beamdog · 2017", "v3.1.4.0 · Windows · 1.5 GB"), ("The Temple of Elemental Evil", "Troika Games · 2003", "v1.11 · Windows · 2.2 GB"),
+            ("The Elder Scrolls III - Morrowind GOTY Edition", "Bethesda Softworks · 2002", "v1.6.0.1820 GOG 0.1 · Windows · 1.9 GB"),
+            ("The Elder Scrolls IV: Oblivion - Game of the Year Edition Deluxe", "Bethesda Game Studios · 2007", "v1.2.0416 GOG v3 · Windows · 5.7 GB"),
+            ("Arx Fatalis", "Arkane Studios · 2002", "v1.22 · Windows · 0.7 GB"),
+            ("Gothic 3 Forsaken Gods Enhanced Edition", "Trine Games & G3 Community Patch Team · 2011", "v2.01.08.14579 · Windows · 3.2 GB")]
+        let realGames = real.enumerated().map { i, g in
+            CoverGame(id: "r\(i)", title: g.0, edition: nil, byline: g.1, genres: [], details: g.2, summary: nil, portrait: nil, wide: nil)
+        }
+        let realDisc = CoverDisc(id: "GOG-001", idText: "GOG-001", partText: nil, media: "BD-R 50", burned: Date(), subtitle: "15 games · 46.9 GB · BD-R 50",
+                                 facts: [("Burned", "2026.11.11 · BD-R 50 GB · 4×"), ("On disc", "checksums.sha256"), ("Install", "copy a game's folder to your drive and run setup_*.exe")],
+                                 games: realGames, backdrop: nil)
+        row.append(AnyView(BDBack(disc: realDisc).border(Color.red, width: 0.5)))
+        for count in [15, 24] {
             let games = (1...count).map { i in
-                CoverGame(id: "g\(i)", title: "A Rather Long Game Title Number \(i): The Enhanced Edition", edition: nil,
-                          byline: "Some Developer Studio · 1999", genres: ["Role-playing", "Adventure", "Fantasy"],
-                          details: "v2.0.0.12 · Windows · Mac · 3.1 GB", summary: nil, portrait: nil, wide: nil)
+                CoverGame(id: "g\(i)", title: i % 3 == 0 ? "Fallout \(i)" : "The Elder Scrolls \(i) - Morrowind GOTY Edition", edition: nil,
+                          byline: i % 2 == 0 ? "Trine Games & G3 Community Patch Team · 2011" : "Bethesda Softworks · 2002",
+                          genres: ["Role-playing", "Adventure", "Fantasy"],
+                          details: "v1.6.0.1820 GOG 0.1 · Windows · 3.1 GB", summary: nil, portrait: nil, wide: nil)
             }
             let disc = CoverDisc(id: "GOG-001", idText: "GOG-001", partText: nil, media: "BD-R 25", burned: Date(), subtitle: "\(count) games",
                                  facts: [("Burned", "2026.11.11"), ("Verified", "2026.11.11"), ("On disc", "checksums.sha256"), ("Install", "copy a game's folder")],
