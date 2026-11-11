@@ -3,11 +3,12 @@ import DiscRecording
 import Foundation
 
 /// Something that puts a `DiscLayout` on a disc and returns where the result is mounted.
+/// `progress` gets the fraction done and, when the drive reports it, the current write rate in bytes per second.
 @MainActor
 protocol DiscWriter: AnyObject {
     var driveName: String { get }
     var ejectsWhenDone: Bool { get }
-    func write(_ layout: DiscLayout, media: Media, speed: Int, progress: @escaping @MainActor (Double) -> Void) async throws -> URL
+    func write(_ layout: DiscLayout, media: Media, speed: Int, progress: @escaping @MainActor (Double, Double?) -> Void) async throws -> URL
 }
 
 enum WriteError: LocalizedError {
@@ -29,7 +30,7 @@ final class DiscRecordingWriter: NSObject, DiscWriter {
     let device: DRDevice
     private var burn: DRBurn?
     private var continuation: CheckedContinuation<Void, Error>?
-    private var onProgress: (@MainActor (Double) -> Void)?
+    private var onProgress: (@MainActor (Double, Double?) -> Void)?
 
     init(device: DRDevice) {
         self.device = device
@@ -38,7 +39,7 @@ final class DiscRecordingWriter: NSObject, DiscWriter {
     var driveName: String { device.displayName() ?? "Burner" }
     var ejectsWhenDone: Bool { true }
 
-    func write(_ layout: DiscLayout, media: Media, speed: Int, progress: @escaping @MainActor (Double) -> Void) async throws -> URL {
+    func write(_ layout: DiscLayout, media: Media, speed: Int, progress: @escaping @MainActor (Double, Double?) -> Void) async throws -> URL {
         let root = try Self.makeTree(layout)
         guard let track = DRTrack(forRootFolder: root), let burn = DRBurn(device: device) else {
             throw WriteError.burnFailed("Could not prepare the disc layout.")
@@ -72,7 +73,10 @@ final class DiscRecordingWriter: NSObject, DiscWriter {
         guard let status = note.userInfo else { return }
         let state = status[DRStatusStateKey] as? String
         if let percent = status[DRStatusPercentCompleteKey] as? Double, percent >= 0 {
-            onProgress?(percent)
+            // The drive reports its current write speed in kilobytes (1000 bytes) per second.
+            let info = status[DRStatusProgressInfoKey] as? [AnyHashable: Any]
+            let kbps = (info?[DRStatusProgressCurrentKPS] as? NSNumber)?.doubleValue
+            onProgress?(percent, kbps.flatMap { $0 > 0 ? $0 * 1000 : nil })
         }
         if state == DRStatusStateDone {
             continuation?.resume()
@@ -141,7 +145,7 @@ final class FolderWriter: DiscWriter {
     var driveName: String { "Simulated burner" }
     var ejectsWhenDone: Bool { false }
 
-    func write(_ layout: DiscLayout, media: Media, speed: Int, progress: @escaping @MainActor (Double) -> Void) async throws -> URL {
+    func write(_ layout: DiscLayout, media: Media, speed: Int, progress: @escaping @MainActor (Double, Double?) -> Void) async throws -> URL {
         let target = folder.appendingPathComponent(layout.volumeName, isDirectory: true)
         let entries = layout.entries
         let total = max(1, layout.totalBytes)
@@ -159,7 +163,7 @@ final class FolderWriter: DiscWriter {
                 }
                 done += entry.size
                 let fraction = Double(done) / Double(total)
-                await MainActor.run { progress(fraction) }
+                await MainActor.run { progress(fraction, nil) }
             }
         }.value
         return target

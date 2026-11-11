@@ -68,6 +68,8 @@ final class BurnJob {
     private(set) var steps: [Step]
     /// Progress of the running step, 0…1.
     private(set) var fraction: Double = 0
+    /// Write rate the drive reports while burning, bytes per second.
+    private(set) var writeRate: Double?
     private(set) var outcome: Outcome?
     let startedAt = Date()
 
@@ -88,12 +90,48 @@ final class BurnJob {
             Step(id: .checksums, title: "Checksums", detail: "SHA-256 for \(plan.fileCount) files"),
             Step(id: .recovery, title: "Recovery data", detail: recoveryDetail),
             Step(id: .layout, title: "Disc layout", detail: "UDF, volume \(plan.volumeName) · read straight from the game folders"),
-            Step(id: .burn, title: "Burning", detail: "\(plan.media.label) at \(plan.speed)×"),
+            Step(id: .burn, title: "Burning", detail: "\(plan.media.label) at \(plan.speed)× ≈ \(BurnEstimate.rateText(BurnEstimate.writeRate(plan.media, speed: plan.speed))) · \(BurnEstimate.durationText(BurnEstimate.burnSeconds(bytes: plan.gameBytes, media: plan.media, speed: plan.speed)))"),
             Step(id: .readBack, title: "Read back", detail: "Re-read every file from the disc and compare"),
         ]
     }
 
     var current: Step? { steps.first { $0.state == .running } }
+
+    /// The nominal write rate for the chosen speed, bytes per second.
+    var nominalWriteRate: Double { BurnEstimate.writeRate(plan.media, speed: plan.speed) }
+
+    /// Time left for this disc: the running step projected from its progress so far (or estimated
+    /// until there's enough progress to go on), plus estimates for the steps still waiting.
+    var remainingSeconds: TimeInterval? {
+        guard isRunning else { return nil }
+        let bytes = plan.gameBytes
+        func estimate(_ id: StepID) -> TimeInterval {
+            switch id {
+            case .checksums: BurnEstimate.checksumSeconds(bytes: bytes)
+            case .recovery: plan.recoveryPercent > 0 ? BurnEstimate.checksumSeconds(bytes: bytes) * 3 : 0
+            case .layout: 0
+            case .burn: BurnEstimate.burnSeconds(bytes: bytes, media: plan.media, speed: plan.speed)
+            case .readBack: BurnEstimate.readBackSeconds(bytes: bytes, media: plan.media)
+            }
+        }
+        var total: TimeInterval = 0
+        for step in steps {
+            switch step.state {
+            case .waiting:
+                total += estimate(step.id)
+            case .running:
+                if let started = step.started, fraction > 0.03 {
+                    let elapsed = Date().timeIntervalSince(started)
+                    total += elapsed * (1 - fraction) / fraction
+                } else {
+                    total += estimate(step.id) * (1 - fraction)
+                }
+            default:
+                break
+            }
+        }
+        return total
+    }
     var isRunning: Bool { outcome == nil }
     var stepNumber: Int { (current?.id.rawValue ?? 0) + 1 }
 
@@ -169,8 +207,9 @@ final class BurnJob {
 
             // 4. Burn
             begin(.burn)
-            let mounted = try await writer.write(layout, media: plan.media, speed: plan.speed) { [weak self] value in
+            let mounted = try await writer.write(layout, media: plan.media, speed: plan.speed) { [weak self] value, rate in
                 self?.fraction = value
+                if let rate { self?.writeRate = rate }
             }
             end(.burn)
 

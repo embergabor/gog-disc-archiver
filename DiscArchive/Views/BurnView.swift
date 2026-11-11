@@ -21,6 +21,13 @@ struct BurnView: View {
                         Text(stepLine)
                             .font(.system(size: 15))
                             .foregroundStyle(Theme.muted)
+                        TimelineView(.periodic(from: .now, by: 5)) { _ in
+                            if let left = job.remainingSeconds {
+                                Text(BurnEstimate.durationText(left).capitalizingFirst + " left for this disc")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(Theme.ink)
+                            }
+                        }
                         Text("Don't eject the disc or unplug the drive. Interrupting a burn leaves the disc unusable.")
                             .font(.system(size: 12))
                             .foregroundStyle(Theme.secondary)
@@ -82,7 +89,9 @@ struct BurnView: View {
             let bytes = Int64(Double(step.id == .readBack ? max(job.plan.gameBytes, 1) : job.plan.gameBytes) * job.fraction)
             return "\(ByteText.gb(bytes)) of \(ByteText.gb(job.plan.gameBytes)) \(step.id == .readBack ? "read back" : "checked")"
         case .burn:
-            return "Writing \(job.plan.media.label) · \(Int((job.fraction * 100).rounded()))%"
+            let rate = job.writeRate.map { "\(BurnEstimate.rateText($0)) now" }
+                ?? "\(job.plan.speed)× ≈ \(BurnEstimate.rateText(job.nominalWriteRate))"
+            return "Writing \(job.plan.media.label) · \(Int((job.fraction * 100).rounded()))% · \(rate)"
         case .recovery:
             return "Making recovery data · \(Int((job.fraction * 100).rounded()))%"
         case .layout:
@@ -185,4 +194,9 @@ struct ProgressRing: View {
         .accessibilityElement()
         .accessibilityLabel("Progress \(Int(value * 100)) percent")
     }
+}
+
+extension String {
+    /// "about 5 min" → "About 5 min"
+    var capitalizingFirst: String { prefix(1).uppercased() + dropFirst() }
 }

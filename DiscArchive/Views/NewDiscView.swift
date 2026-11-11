@@ -452,13 +452,37 @@ private struct SafetyCard: View {
                 Spacer()
                 Picker("Burn speed", selection: $model.draft.speed) {
                     ForEach(model.draft.media.speeds, id: \.self) { speed in
-                        Text(speed == model.draft.media.recommendedSpeed ? "\(speed)× (recommended)" : "\(speed)×").tag(speed)
+                        let rate = BurnEstimate.rateText(BurnEstimate.writeRate(model.draft.media, speed: speed))
+                        Text(speed == model.draft.media.recommendedSpeed ? "\(speed)× · \(rate) (recommended)" : "\(speed)× · \(rate)").tag(speed)
                     }
                 }
                 .labelsHidden()
                 .fixedSize()
             }
+            if let estimate = timeEstimate {
+                Text(estimate)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
+    }
+
+    /// "Burn about 22 min, read-back about 21 min per disc · 4 discs about 2 h 50 min in all"
+    private var timeEstimate: String? {
+        guard case .success(let plan) = model.draftPlan, !plan.isEmpty else { return nil }
+        let media = model.draft.media, speed = model.draft.speed
+        let biggest = plan.map(\.dataBytes).max() ?? 0
+        let burn = BurnEstimate.durationText(BurnEstimate.burnSeconds(bytes: biggest, media: media, speed: speed))
+        let read = BurnEstimate.durationText(BurnEstimate.readBackSeconds(bytes: biggest, media: media))
+        var text = "Burning takes \(burn), reading back \(read)"
+        if plan.count > 1 {
+            let all = plan.reduce(0.0) { $0 + BurnEstimate.discSeconds(bytes: $1.dataBytes, media: media, speed: speed) }
+            text += " for the fullest disc. All \(plan.count) discs: \(BurnEstimate.durationText(all)) plus swapping."
+        } else {
+            text += "."
+        }
+        return text
     }
 
     private func check(_ title: String, _ detail: String) -> some View {
