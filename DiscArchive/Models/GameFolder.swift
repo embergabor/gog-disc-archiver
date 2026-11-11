@@ -19,6 +19,8 @@ struct GameFolder: Identifiable, Hashable, Codable, Sendable {
     var installer: InstallerVersionInfo? = nil
     /// The user's label for this release, e.g. "Next Gen".
     var edition: String? = nil
+    /// A title typed by the user; used for the cover lookup and shown everywhere.
+    var customTitle: String? = nil
 
     var setupFile: String? { InstallerName.setupFile(in: files.map(\.relativePath)) }
     /// The installer's version info if it has one, else the version in its file name.
@@ -29,7 +31,8 @@ struct GameFolder: Identifiable, Hashable, Codable, Sendable {
         return v.isEmpty ? nil : v
     }
     /// The installer's own product name first (GOG renames games in its store), then GOG's title, then the folder.
-    var title: String { installer?.productName ?? info?.title ?? name }
+    /// Typed title, then the installer's product name (unless cut short), then GOG's title, then the folder.
+    var title: String { customTitle ?? installer?.usableName ?? info?.title ?? installer?.productName ?? name }
 
     /// Name on the disc and in the catalogue: the folder's own name.
     var name: String { url.lastPathComponent }

@@ -14,7 +14,7 @@ final class CoverPreviewTests: XCTestCase {
         func record(_ game: GameFolder, info: GameInfo?, edition: String? = nil) -> GameRecord {
             GameRecord(folder: game.name, platforms: game.platforms,
                        files: game.files.map { FileRecord(path: game.name + "/" + $0.relativePath, size: $0.size, sha256: "") },
-                       version: game.version, info: info, edition: edition, installerTitle: game.installer?.productName)
+                       version: game.version, info: info, edition: edition, installerTitle: game.customTitle ?? game.installer?.usableName)
         }
         func games(_ names: [String]) async throws -> [(GameFolder, GameInfo?)] {
             var out: [(GameFolder, GameInfo?)] = []
@@ -44,16 +44,22 @@ final class CoverPreviewTests: XCTestCase {
         witcher.setID = "GOG-002"; witcher.part = 1; witcher.partCount = 3
         let sierra = disc("GOG-003", try await games(["Gabriel Knight", "Gabriel Knight 2", "Gabriel Knight 3", "Planescape Torment", "Icewind Dale"]))
         let baldur = disc("GOG-004", try await games(["Baldur's Gate - Enhanced Edition v2.7.3.0-s - GoG", "Baldurs Gate 2"]))
+        let oblivionItems = try await games(["The Elder Scrolls IV - Oblivion"])
+        print("OBLIVION", oblivionItems.first.map { "\($0.0.title) | \($0.1?.title ?? "NOT FOUND") | steam \($0.1?.steamAppID.map(String.init) ?? "-")" } ?? "no folder")
+        let oblivion = disc("GOG-006", oblivionItems)
 
         var covers: [CoverDisc] = []
-        for (name, r) in [("1-riddick", riddick), ("2-witcher-1of3", witcher), ("3-five-games", sierra), ("4-two-games", baldur)] {
+        for (name, r) in [("1-riddick", riddick), ("2-witcher-1of3", witcher), ("3-five-games", sierra), ("4-two-games", baldur), ("5-oblivion", oblivion)] {
             let c = await CoverBuilder.disc(r, service: service)
             covers.append(c)
-            let renderer = ImageRenderer(content: CoverSheet(kind: .bluRay, discs: [c]))
-            renderer.scale = 1.6
-            let png = NSBitmapImageRep(data: renderer.nsImage!.tiffRepresentation!)!.representation(using: .png, properties: [:])!
-            try png.write(to: folder.appendingPathComponent("bd-\(name).png"))
+            for kind in [CoverKind.bluRay, .jewel] {
+                let renderer = ImageRenderer(content: CoverSheet(kind: kind, discs: [c]))
+                renderer.scale = 1.6
+                let png = NSBitmapImageRep(data: renderer.nsImage!.tiffRepresentation!)!.representation(using: .png, properties: [:])!
+                try png.write(to: folder.appendingPathComponent("\(kind == .bluRay ? "bd" : "jewel")-\(name).png"))
+            }
         }
+        try CoverBuilder.writePDF(kind: .jewel, discs: covers, to: folder.appendingPathComponent("Jewel booklet previews.pdf"))
         try CoverBuilder.writePDF(kind: .bluRay, discs: covers, to: folder.appendingPathComponent("Blu-ray cover previews.pdf"))
 
         // The New disc screen with a collection disc, to check the live cover preview.

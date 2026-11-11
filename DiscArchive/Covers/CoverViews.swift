@@ -249,9 +249,16 @@ struct BDSpine: View {
     var body: some View {
         ZStack {
             CoverStyle.ink
-            HStack(spacing: 8) {
+            // The title starts as large as the ID and shrinks only as far as it must to fit the spine.
+            HStack(spacing: 10) {
                 Text(disc.label).font(CoverStyle.mono(15)).tracking(1.5)
-                Text(disc.spineText).font(.system(size: 8.5, weight: .semibold)).lineLimit(1)
+                    .fixedSize()
+                    .layoutPriority(1)
+                Text(disc.spineText)
+                    .font(.system(size: 15, weight: .bold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.3)
+                Spacer(minLength: 0)
             }
             .foregroundStyle(.white)
             .frame(width: BDWrap.panel.height - mm(12))
@@ -262,16 +269,32 @@ struct BDSpine: View {
     }
 }
 
-struct BDBack: View {
+/// The back of a cover: the game list and the disc's details. Used for the Blu-ray case back
+/// (128.85 × 148.4 mm) and the inside of the jewel booklet (120 × 120 mm). The more games, and the
+/// smaller the panel, the more compact the rows, so everything fits.
+struct BackPanel: View {
     var disc: CoverDisc
+    var size: CGSize
+
+    /// How much room there is compared with the Blu-ray back.
+    private var room: CGFloat { size.height / BDWrap.panel.height }
+    private var count: Int { disc.games.count }
+
+    private enum Style { case full, medium, twoLine, oneLine }
+
+    private var style: Style {
+        let n = CGFloat(count)
+        if n <= 4 * room { return .full }
+        if n <= 6 * room { return .medium }
+        if n <= 11 * room { return .twoLine }
+        return .oneLine
+    }
 
     var body: some View {
-        let count = disc.games.count
         let single = count == 1
-        let thumbW: CGFloat = count <= 4 ? mm(15) : mm(8.5)
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
-                Text(disc.label).font(CoverStyle.mono(17)).tracking(1.2)
+                Text(disc.label).font(CoverStyle.mono(room < 0.9 ? 15 : 17)).tracking(1.2)
                 Spacer()
                 Text("CONTENTS").font(.system(size: 6.5, weight: .semibold)).tracking(1.2).foregroundStyle(CoverStyle.grey)
             }
@@ -281,48 +304,10 @@ struct BDBack: View {
                 .padding(.top, 2)
             Rectangle().fill(CoverStyle.ink).frame(height: 1.5).padding(.top, 6).padding(.bottom, 2)
             ForEach(disc.games) { game in
-                if count > 11 {
-                    oneLineRow(game)
-                } else if count >= 7 {
-                    compactRow(game, titleSize: 8.5)
-                } else {
-                    HStack(alignment: .top, spacing: mm(3)) {
-                        Group {
-                            if let portrait = game.portrait {
-                                Image(nsImage: portrait).resizable().aspectRatio(contentMode: .fill)
-                            } else {
-                                Color(hex: 0xE6E6E6)
-                            }
-                        }
-                        .frame(width: thumbW, height: thumbW * 1.5)
-                        .clipped()
-                        VStack(alignment: .leading, spacing: 1.5) {
-                            Text(game.title).font(.system(size: 9.5, weight: .bold)).lineLimit(2)
-                            if count <= 4 {
-                                if !game.byline.isEmpty {
-                                    Text(game.byline).font(.system(size: 7.5)).foregroundStyle(CoverStyle.grey)
-                                }
-                                if !game.genres.isEmpty {
-                                    Text(game.genres.prefix(3).joined(separator: " · ")).font(.system(size: 7)).foregroundStyle(CoverStyle.grey)
-                                }
-                            } else {
-                                // 5–6 games: developer, year and genres share a line.
-                                Text(([game.byline] + game.genres.prefix(2)).filter { !$0.isEmpty }.joined(separator: " · "))
-                                    .font(.system(size: 7)).foregroundStyle(CoverStyle.grey).lineLimit(1)
-                            }
-                            Text(game.details).font(.system(size: 7)).foregroundStyle(CoverStyle.grey).lineLimit(2)
-                            if single, let summary = game.summary {
-                                Text(summary)
-                                    .font(.system(size: 7.5))
-                                    .lineSpacing(1)
-                                    .foregroundStyle(Color(hex: 0x222222))
-                                    .lineLimit(14)
-                                    .padding(.top, 4)
-                            }
-                        }
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.vertical, count <= 4 ? 4 : 3)
+                switch style {
+                case .oneLine: oneLineRow(game)
+                case .twoLine: twoLineRow(game)
+                case .full, .medium: richRow(game, single: single)
                 }
                 Rectangle().fill(CoverStyle.rule).frame(height: 0.5)
             }
@@ -331,38 +316,105 @@ struct BDBack: View {
                 ForEach(Array(disc.facts.enumerated()), id: \.offset) { _, fact in
                     GridRow {
                         Text(fact.0).foregroundStyle(CoverStyle.grey)
-                        Text(fact.1)
+                        Text(fact.1).fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
             .font(.system(size: 7))
         }
         .foregroundStyle(CoverStyle.ink)
-        .padding(.horizontal, mm(7))
-        .padding(.vertical, mm(6.5))
-        .frame(width: BDWrap.panel.width, height: BDWrap.panel.height, alignment: .topLeading)
+        .padding(.horizontal, mm(room < 0.9 ? 6 : 7))
+        .padding(.vertical, mm(room < 0.9 ? 5.5 : 6.5))
+        .frame(width: size.width, height: size.height, alignment: .topLeading)
         .background(CoverStyle.paper)
+        .clipped()
     }
-}
 
-extension BDBack {
-    /// Seven or more games: two lines per game, no thumbnails, so up to about a dozen fit.
-    func compactRow(_ game: CoverGame, titleSize: CGFloat) -> some View {
+    /// Cover thumbnail, title, developer and year, genres, details; the description too when alone.
+    private func richRow(_ game: CoverGame, single: Bool) -> some View {
+        let thumbW: CGFloat = style == .full ? mm(room < 0.9 ? 12 : 15) : mm(8.5)
+        return HStack(alignment: .top, spacing: mm(3)) {
+            Group {
+                if let portrait = game.portrait {
+                    Image(nsImage: portrait).resizable().aspectRatio(contentMode: .fill)
+                } else {
+                    Color(hex: 0xE6E6E6)
+                }
+            }
+            .frame(width: thumbW, height: thumbW * 1.5)
+            .clipped()
+            VStack(alignment: .leading, spacing: 1.5) {
+                Text(game.title).font(.system(size: 9.5, weight: .bold)).lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                if style == .full {
+                    if !game.byline.isEmpty {
+                        Text(game.byline).font(.system(size: 7.5)).foregroundStyle(CoverStyle.grey)
+                    }
+                    if !game.genres.isEmpty {
+                        Text(game.genres.prefix(3).joined(separator: " · ")).font(.system(size: 7)).foregroundStyle(CoverStyle.grey)
+                    }
+                } else {
+                    Text(([game.byline] + game.genres.prefix(2)).filter { !$0.isEmpty }.joined(separator: " · "))
+                        .font(.system(size: 7)).foregroundStyle(CoverStyle.grey).lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Text(game.details).font(.system(size: 7)).foregroundStyle(CoverStyle.grey)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                if single, let summary = game.summary {
+                    Text(summary)
+                        .font(.system(size: 7.5))
+                        .lineSpacing(1)
+                        .foregroundStyle(Color(hex: 0x222222))
+                        .lineLimit(Int(14 * room))
+                        .padding(.top, 4)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, style == .full ? 4 : 3)
+    }
+
+    /// Two lines per game, no thumbnail; the second line wraps when the details are long.
+    private func twoLineRow(_ game: CoverGame) -> some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text(game.title).font(.system(size: titleSize, weight: .bold)).lineLimit(1)
-            Text(([game.byline, game.details]).filter { !$0.isEmpty }.joined(separator: " · "))
-                .font(.system(size: 6.5)).foregroundStyle(CoverStyle.grey).lineLimit(1)
+            Text(game.title).font(.system(size: 8.5, weight: .bold)).lineLimit(1)
+            Text([game.byline, game.details].filter { !$0.isEmpty }.joined(separator: " · "))
+                .font(.system(size: 6.5)).foregroundStyle(CoverStyle.grey).lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.vertical, 2.5)
     }
 
-    /// Twelve or more games: one line each, title in bold.
-    func oneLineRow(_ game: CoverGame) -> some View {
+    /// Many games: one line each, title in bold.
+    private func oneLineRow(_ game: CoverGame) -> some View {
         (Text(game.title).font(.system(size: 7.5, weight: .bold))
          + Text("  " + [game.byline, game.details].filter { !$0.isEmpty }.joined(separator: " · "))
             .font(.system(size: 6.5)).foregroundColor(CoverStyle.grey))
             .lineLimit(1)
             .padding(.vertical, 2)
+    }
+}
+
+/// The Blu-ray case back.
+struct BDBack: View {
+    var disc: CoverDisc
+    var body: some View { BackPanel(disc: disc, size: BDWrap.panel) }
+}
+
+/// Jewel case booklet, printed flat: the inside panel (games and details) left, the front right.
+/// Fold in half along the middle so the front faces out.
+struct JewelBooklet: View {
+    var disc: CoverDisc
+    static let size = CGSize(width: JewelFront.size.width * 2, height: JewelFront.size.height)
+
+    var body: some View {
+        HStack(spacing: 0) {
+            BackPanel(disc: disc, size: JewelFront.size)
+            Rectangle().fill(Color(hex: 0xE0E0E0)).frame(width: 0.5)
+            JewelFront(disc: disc)
+        }
+        .frame(width: Self.size.width, height: Self.size.height)
     }
 }
 
@@ -387,24 +439,19 @@ enum CoverKind: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .jewel: "Jewel case front"
+        case .jewel: "Jewel case booklet"
         case .bluRay: "Blu-ray case 14 mm"
         }
     }
 
-    /// A4 portrait for jewel fronts (two per sheet), landscape for the Blu-ray wrap.
-    var pageSize: CGSize {
-        switch self {
-        case .jewel: CGSize(width: 595.28, height: 841.89)
-        case .bluRay: CGSize(width: 841.89, height: 595.28)
-        }
-    }
+    /// A4 landscape: one folding jewel booklet (240 × 120 mm) or one Blu-ray wrap per sheet.
+    var pageSize: CGSize { CGSize(width: 841.89, height: 595.28) }
 
-    var perPage: Int { self == .jewel ? 2 : 1 }
+    var perPage: Int { 1 }
 
     var note: String {
         switch self {
-        case .jewel: "Jewel case front inserts · 120 × 120 mm · print at 100% on A4 · cut on the corner marks"
+        case .jewel: "Jewel case booklet · 240 × 120 mm, folds to 120 × 120 · print at 100% on A4 · cut on the corner marks, fold at the middle marks so the front faces out"
         case .bluRay: "Blu-ray case cover, 14 mm spine · 271.7 × 148.4 mm · print at 100% on A4 · cut on the corner marks, fold at the spine marks"
         }
     }
@@ -443,11 +490,9 @@ struct CoverSheet: View {
             Spacer(minLength: 0)
             switch kind {
             case .jewel:
-                VStack(spacing: mm(14)) {
-                    ForEach(discs.prefix(2)) { disc in
-                        JewelFront(disc: disc)
-                            .overlay(CropMarks(size: JewelFront.size))
-                    }
+                if let disc = discs.first {
+                    JewelBooklet(disc: disc)
+                        .overlay(CropMarks(size: JewelBooklet.size, folds: [JewelFront.size.width]))
                 }
             case .bluRay:
                 if let disc = discs.first {

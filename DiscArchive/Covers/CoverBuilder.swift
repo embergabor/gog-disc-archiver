@@ -24,7 +24,7 @@ enum CoverBuilder {
         let games = disc.games.map { g in
             GameRecord(folder: g.name, platforms: g.platforms,
                        files: g.files.map { FileRecord(path: g.name + "/" + $0.relativePath, size: $0.size, sha256: "") },
-                       version: g.version, info: g.info, edition: g.edition, installerTitle: g.installer?.productName)
+                       version: g.version, info: g.info, edition: g.edition, installerTitle: g.customTitle ?? g.installer?.usableName)
         }
         return DiscRecord(id: disc.id, volumeName: disc.volumeName, media: media, burnedAt: Date(), drive: "", speed: speed,
                           recoveryPercent: recoveryPercent, games: games, recoveryFiles: [], checks: [],

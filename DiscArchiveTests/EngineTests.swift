@@ -211,3 +211,41 @@ final class SourceChangeTests: XCTestCase {
         XCTAssertThrowsError(try BurnJob.checkUnchanged([game]))
     }
 }
+
+@MainActor
+final class SavedListTests: XCTestCase {
+    func testSaveAndOpenKeepsOrderTitlesAndEditions() async throws {
+        let dir = try TempDir()
+        UserDefaults.standard.register(defaults: ["archiveRoot": dir.url.appendingPathComponent("Archive").path])
+        let model = AppModel()
+        let a = try GameFolder.scan(try dir.makeGame("g/Alpha", files: ["setup_alpha.exe": 100]))
+        var b = try GameFolder.scan(try dir.makeGame("g/Beta", files: ["setup_beta.exe": 200]))
+        let gone = try dir.makeGame("g/Gone", files: ["setup_gone.exe": 50])
+        b.edition = "Next Gen"
+        b.customTitle = "Beta Remastered"
+        model.draft.games = [b, a, try GameFolder.scan(gone)]
+        model.selectMedia(.dvdR)
+        model.saveList(name: "Weekend batch")
+        XCTAssertEqual(model.savedLists.map(\.name), ["Weekend batch"])
+
+        // A fresh app reads it back from disk.
+        let reopened = AppModel()
+        let list = try XCTUnwrap(reopened.savedLists.first)
+        XCTAssertEqual(list.games.map(\.name), ["Beta", "Alpha", "Gone"])
+        try FileManager.default.removeItem(at: gone)
+        reopened.openList(list)
+        for _ in 0..<100 where reopened.draft.games.count < 2 || reopened.alert == nil {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        XCTAssertEqual(reopened.draft.games.map(\.name), ["Beta", "Alpha"])
+        XCTAssertEqual(reopened.draft.games[0].edition, "Next Gen")
+        XCTAssertEqual(reopened.draft.games[0].title, "Beta Remastered")
+        XCTAssertEqual(reopened.draft.media, .dvdR)
+        XCTAssertEqual(reopened.draft.listName, "Weekend batch")
+        XCTAssertTrue(reopened.alert?.contains("setup_gone") == false && reopened.alert?.contains("Gone") == true)
+
+        reopened.deleteList(list)
+        XCTAssertTrue(reopened.savedLists.isEmpty)
+        XCTAssertTrue(AppModel().savedLists.isEmpty)
+    }
+}

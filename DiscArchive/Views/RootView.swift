@@ -57,6 +57,14 @@ private struct Detail: View {
 
 private struct Sidebar: View {
     @Environment(AppModel.self) private var model
+    @State private var opening: SavedList?
+    @State private var deleting: SavedList?
+
+    /// Opens a saved list, asking first when New disc holds games that would be lost.
+    private func open(_ list: SavedList) {
+        let unsaved = !model.draft.games.isEmpty && model.draft.listID != list.id
+        if unsaved { opening = list } else { model.openList(list) }
+    }
 
     var body: some View {
         @Bindable var model = model
@@ -65,11 +73,34 @@ private struct Sidebar: View {
                 Label("New disc", systemImage: "plus.circle")
                     .tag(AppModel.Screen.newDisc)
             }
+            if !model.savedLists.isEmpty {
+                Section("Saved lists") {
+                    ForEach(model.savedLists) { list in
+                        SavedListRow(list: list, current: model.draft.listID == list.id)
+                            .contentShape(Rectangle())
+                            .onTapGesture { open(list) }
+                            .contextMenu {
+                                Button("Open") { open(list) }
+                                Button("Delete…", role: .destructive) { deleting = list }
+                            }
+                    }
+                }
+            }
             Section("Archive") {
                 Label("All discs", systemImage: "opticaldisc")
                     .badge(model.discs.count)
                     .tag(AppModel.Screen.archive)
             }
+        }
+        .confirmationDialog("Replace the games on New disc?", isPresented: Binding(get: { opening != nil }, set: { if !$0 { opening = nil } })) {
+            Button("Open \u{201C}\(opening?.name ?? "")\u{201D}") { if let list = opening { model.openList(list) } }
+        } message: {
+            Text("New disc already has games that aren't saved in this list. Save them first with Save list… if you want to keep them.")
+        }
+        .confirmationDialog("Delete \u{201C}\(deleting?.name ?? "")\u{201D}?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
+            Button("Delete list", role: .destructive) { if let list = deleting { model.deleteList(list) } }
+        } message: {
+            Text("Only the saved list is removed. The game folders stay where they are.")
         }
         .listStyle(.sidebar)
         .disabled(model.job?.isRunning == true)
@@ -93,5 +124,27 @@ private struct Sidebar: View {
 
     private func abbreviate(_ path: String) -> String {
         (path as NSString).abbreviatingWithTildeInPath
+    }
+}
+
+private struct SavedListRow: View {
+    var list: SavedList
+    var current: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: list.burnedAt == nil ? "list.bullet.rectangle" : "checkmark.circle")
+                .foregroundStyle(current ? Theme.ink : Theme.secondary)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(list.name)
+                    .lineLimit(1)
+                    .fontWeight(current ? .semibold : .regular)
+                Text(list.burnedAt.map { "Burned \(DateText.day($0))" } ?? list.summary)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.secondary)
+                    .lineLimit(1)
+            }
+        }
+        .help(list.burnedAt == nil ? "Open this list on New disc" : "Burned \(DateText.day(list.burnedAt!)) · open it again to burn another copy")
     }
 }

@@ -86,6 +86,12 @@ struct InstallerVersionInfo: Codable, Hashable, Sendable {
     var productName: String?
     var productVersion: String?
 
+    /// GOG's installers cut long product names at 60 characters ("… Game of the Year Edition D").
+    var nameLooksCut: Bool { (productName?.count ?? 0) >= 60 }
+
+    /// The product name, unless it was cut short.
+    var usableName: String? { nameLooksCut ? nil : productName }
+
     /// Reads the setup file's version resource. The program part of an installer is small and comes first,
     /// so only the first 32 MB are read even for single-file installers.
     static func read(_ url: URL) -> InstallerVersionInfo? {

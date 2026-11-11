@@ -17,6 +17,9 @@ Design canvas: https://claude.ai/artifact/7RWSCDsxvUxja4FTYAL93U
   - par2 recovery data per game (5% or 10%), if `par2` is installed (`brew install par2`).
   - Burns with Apple's DiscRecording framework straight from the folders: UDF, no disc image.
   - Reads every file back from the disc and compares it before calling the disc safe.
+- **Saved lists:** Save list… keeps a prepared New disc list (order, titles, editions, disc type) in
+  `~/Archive/Lists` to burn later; open it from the sidebar. Burned lists are marked, not deleted.
+- **Titles:** the pencil on a game sets your own title (shown everywhere, used to search for the cover).
 - **Archive:** catalogue of burned discs in `~/Archive/discs.json`, search by game name,
   re-check an old disc (insert it, the check starts when it mounts). Due every 3 years.
 
@@ -26,7 +29,7 @@ Design canvas: https://claude.ai/artifact/7RWSCDsxvUxja4FTYAL93U
   GOG's wide art with the title on a band. Print covers (New disc, the burn screens, or Archive → Print covers…) makes an A4 PDF, also before
   or while burning. New disc shows a live preview of each planned Blu-ray case; drag games in Contents to
   change their order on the front grid and the back. The PDF:
-  jewel case fronts (120 × 120 mm, two per sheet) or a Blu-ray 14 mm case wrap (271.7 × 148.4 mm)
+  a folding jewel case booklet (240 × 120 mm, games inside, box art front; fold in half, one-sided printing) or a Blu-ray 14 mm case wrap (271.7 × 148.4 mm)
   with box art and ID on the front (a grid of every game's cover on multi-game discs), ID on the spine,
   and the games with developer, year, genres, build, size and GOG's description on the back.
 

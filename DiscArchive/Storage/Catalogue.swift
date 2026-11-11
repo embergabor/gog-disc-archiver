@@ -12,6 +12,8 @@ struct AppPaths: Sendable {
 
     /// Game info and cover art fetched from GOG and Steam.
     var info: URL { root.appendingPathComponent("Info", isDirectory: true) }
+    /// Prepared lists kept to burn later.
+    var lists: URL { root.appendingPathComponent("Lists", isDirectory: true) }
     /// A set left part-way with Finish later.
     var pendingSet: URL { root.appendingPathComponent("pending.json") }
     /// Cover PDFs.

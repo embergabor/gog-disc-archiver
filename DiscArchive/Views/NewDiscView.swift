@@ -3,6 +3,9 @@ import SwiftUI
 struct NewDiscView: View {
     @Environment(AppModel.self) private var model
     @State private var dropTargeted = false
+    @State private var savingList = false
+    @State private var listName = ""
+    @State private var confirmClear = false
     /// Where a dragged game would land: before or after a row, or at the end (`url` nil).
     @State private var marker: DropMarker?
     @State private var rowHeights: [URL: CGFloat] = [:]
@@ -28,11 +31,35 @@ struct NewDiscView: View {
             .padding(.horizontal, 28)
             .padding(.vertical, 24)
         }
-        .navigationTitle("New disc")
+        .alert(model.draft.listID == nil ? "Save list" : "Update saved list", isPresented: $savingList) {
+            TextField("Name", text: $listName)
+            Button("Save") { model.saveList(name: listName) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Keeps the games in this order with their titles and editions, the disc type and speed, to burn later.")
+        }
+        .confirmationDialog("Clear New disc?", isPresented: $confirmClear) {
+            Button("Clear", role: .destructive) { model.clearDraft() }
+        } message: {
+            Text(model.draft.listID == nil ? "The games are removed from this screen. Nothing is deleted from your drive." : "The saved list stays under Saved lists.")
+        }
+        .navigationTitle(model.draft.listName ?? "New disc")
         .navigationSubtitle(subtitle)
         .toolbar {
             ToolbarItem(placement: .status) {
                 DriveBadge()
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    listName = model.suggestedListName
+                    savingList = true
+                } label: {
+                    Label(model.draft.listID == nil ? "Save list…" : "Save list", systemImage: "square.and.arrow.down")
+                        .labelStyle(.titleAndIcon)
+                }
+                .buttonStyle(PillButtonStyle())
+                .disabled(model.draft.games.isEmpty)
+                .help("Keep this list, its order, titles and editions, to burn later. It appears under Saved lists.")
             }
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -121,13 +148,21 @@ struct NewDiscView: View {
                 Text("\(model.draft.games.count) games · \(model.draft.fileCount) files")
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.secondary)
+                if !model.draft.games.isEmpty {
+                    Button("Clear…") { confirmClear = true }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.secondary)
+                        .padding(.leading, 8)
+                }
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 14)
             Divider().overlay(Theme.rowDivider)
             ForEach(model.draft.games) { game in
                 GameRow(game: game, thumbnail: model.thumbnails[game.url], tag: tags[game.url],
-                        edition: Binding(get: { game.edition ?? "" }, set: { model.setEdition($0, for: game) })) { model.remove(game) }
+                        edition: Binding(get: { game.edition ?? "" }, set: { model.setEdition($0, for: game) }),
+                        setTitle: { model.setTitle($0, for: game) }) { model.remove(game) }
                     .overlay(alignment: marker?.below == true ? .bottom : .top) {
                         if marker?.url == game.url { InsertionLine() }
                     }
@@ -184,7 +219,9 @@ private struct GameRow: View {
     var thumbnail: NSImage?
     var tag: String?
     @Binding var edition: String
+    var setTitle: (String) -> Void
     var remove: () -> Void
+    @State private var editingTitle = false
 
     /// Drag payload for reordering rows; plain URLs would look like new folders dropped from the Finder.
     static let reorderPrefix = "discarchive-reorder:"
@@ -197,13 +234,40 @@ private struct GameRow: View {
                 .help("Drag to change the order: covers on the front and games on the back follow it")
             BoxArt(image: thumbnail, width: 28)
             VStack(alignment: .leading, spacing: 2) {
-                Text(game.title)
-                    .font(.system(size: 13, weight: .semibold))
-                    .lineLimit(1)
-                Text(detail)
-                    .font(.system(size: 12))
+                HStack(spacing: 6) {
+                    Text(game.title)
+                        .font(.system(size: 13, weight: .semibold))
+                        .lineLimit(1)
+                    Button { editingTitle = true } label: {
+                        Image(systemName: "pencil")
+                            .font(.system(size: 11))
+                            .frame(width: 20, height: 20)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                     .foregroundStyle(Theme.secondary)
-                    .lineLimit(1)
+                    .help("Type the title yourself: it's shown everywhere and used to find the cover")
+                    .popover(isPresented: $editingTitle, arrowEdge: .bottom) {
+                        TitleEditor(current: game.customTitle ?? game.title, hasCustom: game.customTitle != nil) { text in
+                            editingTitle = false
+                            setTitle(text)
+                        }
+                    }
+                }
+                HStack(spacing: 6) {
+                    Text(detail)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.secondary)
+                        .lineLimit(1)
+                    if game.lookedUp && game.info == nil {
+                        Button("Not found · set title…") { editingTitle = true }
+                            .buttonStyle(.plain)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Tone.warn.foreground)
+                    } else if !game.lookedUp {
+                        ProgressView().controlSize(.mini)
+                    }
+                }
             }
             Spacer()
             TextField("Edition", text: $edition, prompt: Text("Edition, e.g. Next Gen"))
@@ -243,7 +307,6 @@ private struct GameRow: View {
         if let v = game.version { parts.append("v" + v.replacingOccurrences(of: "_", with: " ")) }
         parts += game.platforms
         parts.append(ByteText.files(game.files.count))
-        if game.lookedUp && game.info == nil { parts.append("not found on GOG") }
         if game.title != game.name { parts.append("folder \u{201C}\(game.name)\u{201D}") }
         return parts.joined(separator: " · ")
     }
@@ -607,7 +670,7 @@ struct CoverZoomView: View {
                     Text("\(index + 1) of \(covers.count)").font(.system(size: 12)).foregroundStyle(Theme.secondary)
                 }
                 Spacer()
-                PillPicker(options: [(CoverKind.bluRay, "Blu-ray case"), (CoverKind.jewel, "Jewel front")], selection: $kind)
+                PillPicker(options: [(CoverKind.bluRay, "Blu-ray case"), (CoverKind.jewel, "Jewel booklet")], selection: $kind)
                 if covers.count > 1 {
                     Button { step(-1, from: index) } label: { Image(systemName: "chevron.left") }
                         .buttonStyle(PillButtonStyle())
@@ -627,7 +690,7 @@ struct CoverZoomView: View {
             .padding(16)
             Divider()
             GeometryReader { geo in
-                let size = kind == .bluRay ? BDWrap.size : JewelFront.size
+                let size = kind == .bluRay ? BDWrap.size : JewelBooklet.size
                 let scale = min(geo.size.width / size.width, geo.size.height / size.height, 2.2)
                 Group {
                     if covers.indices.contains(index) {
@@ -635,7 +698,7 @@ struct CoverZoomView: View {
                             if kind == .bluRay {
                                 BDWrapView(disc: covers[index])
                             } else {
-                                JewelFront(disc: covers[index])
+                                JewelBooklet(disc: covers[index])
                             }
                         }
                         // Covers have nothing to click, and their blurred backdrop reaches past the frame,
@@ -732,5 +795,38 @@ private struct RowDrop: DropDelegate {
             model.moveGame(dragged, to: target, after: below(info))
         }
         return true
+    }
+}
+
+/// Type a game's title: it replaces the installer's name and is used to search GOG and Steam for the cover.
+private struct TitleEditor: View {
+    @State var current: String
+    var hasCustom: Bool
+    var save: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Game title").font(.system(size: 13, weight: .semibold))
+            TextField("Title", text: $current)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 340)
+                .onSubmit { save(current) }
+            Text("Shown in the archive and on covers, and used to search GOG and Steam for the cover. If nothing is found, the cover shows this title.")
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.secondary)
+                .frame(width: 340, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                if hasCustom {
+                    Button("Use the installer's title") { save("") }
+                        .buttonStyle(PillButtonStyle())
+                }
+                Spacer()
+                Button("Save and find cover") { save(current) }
+                    .buttonStyle(PillButtonStyle(prominent: true))
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(16)
     }
 }

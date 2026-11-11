@@ -62,7 +62,7 @@ struct CoverPrintView: View {
                                 .foregroundStyle(kind == option ? Theme.ink : Theme.secondary)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(option.label).font(.system(size: 13, weight: .semibold))
-                                Text(option == .jewel ? "Front with box art and disc ID, 120 × 120 mm. Two per sheet."
+                                Text(option == .jewel ? "Folding booklet, 240 × 120 mm: games and details inside, box art and ID on the front. Fold in half, no double-sided printing."
                                                       : "Box art and ID on the front, ID on the spine, games and disc details on the back.")
                                     .font(.system(size: 11))
                                     .foregroundStyle(Theme.secondary)

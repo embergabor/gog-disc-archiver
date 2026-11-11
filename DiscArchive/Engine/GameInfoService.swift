@@ -66,8 +66,14 @@ struct GameInfoService: Sendable {
         let html = String(decoding: try await Self.get(parts.url!), as: UTF8.self)
         let wanted = Set(names.map(InstallerName.normalize))
         return Self.parseGogDB(html).first { row in
-            wanted.contains(InstallerName.normalize(relaxed ? Self.mainTitle(row.title) : row.title))
+            relaxed ? Self.looseMatch(row.title, wanted) : wanted.contains(InstallerName.normalize(row.title))
         }?.id
+    }
+
+    /// A store title whose part before " - " ("The Elder Scrolls IV: Oblivion") or before ":"
+    /// ("Gabriel Knight 3") is exactly one of the wanted names.
+    static func looseMatch(_ title: String, _ wanted: Set<String>) -> Bool {
+        wanted.contains(InstallerName.normalize(baseTitle(title))) || wanted.contains(InstallerName.normalize(mainTitle(title)))
     }
 
     /// The main part of a store title: "Gabriel Knight 3: Blood of the Sacred" → "Gabriel Knight 3".
@@ -189,7 +195,7 @@ struct GameInfoService: Sendable {
         let page = try JSONDecoder().decode(CatalogPage.self, from: data)
         let exact = names.lazy.compactMap { Self.matchCatalog($0, products: page.products) }.first
         let wanted = Set(names.map(InstallerName.normalize))
-        let loose = relaxed ? page.products.first { wanted.contains(InstallerName.normalize(Self.mainTitle($0.title ?? ""))) } : nil
+        let loose = relaxed ? page.products.first { Self.looseMatch($0.title ?? "", wanted) } : nil
         guard let p = relaxed ? loose : exact else { return nil }
         return GameInfo(gogID: p.id,
                         title: InstallerName.cleanStoreTitle(p.title ?? name),
@@ -263,7 +269,7 @@ struct GameInfoService: Sendable {
             var items: [Item]
         }
         return try JSONDecoder().decode(Search.self, from: data).items
-            .first { $0.type == "app" && wanted.contains(InstallerName.normalize(relaxed ? Self.mainTitle($0.name ?? "") : ($0.name ?? ""))) }?.id
+            .first { $0.type == "app" && (relaxed ? Self.looseMatch($0.name ?? "", wanted) : wanted.contains(InstallerName.normalize($0.name ?? ""))) }?.id
     }
 
     // MARK: - Art

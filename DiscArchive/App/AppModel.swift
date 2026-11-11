@@ -21,6 +21,9 @@ struct DiscDraft {
     var recoveryPercent = 5
     var speed = 4
     var games: [GameFolder] = []
+    /// The saved list this draft was opened from or saved as.
+    var listID: String? = nil
+    var listName: String? = nil
 
     var gameBytes: Int64 { games.reduce(0) { $0 + $1.totalBytes } }
     var fileCount: Int { games.reduce(0) { $0 + $1.files.count } }
@@ -48,6 +51,8 @@ final class AppModel {
     var session: BurnSession?
     /// A set left part-way with Finish later.
     private(set) var pending: PendingSet?
+    /// Prepared lists kept to burn later, newest first.
+    private(set) var savedLists: [SavedList] = []
     /// The game row being dragged to a new place in Contents.
     var draggingGame: URL?
     /// The list order before Optimise, for Undo. Cleared by any other change to the list.
@@ -93,6 +98,7 @@ final class AppModel {
         draft = DiscDraft(id: DiscID.next(after: loaded.map(\.baseID) + DiscPlanner.baseIDs(pending?.discs ?? [])))
         discs = loaded
         alert = problem
+        savedLists = SavedListStore(folder: paths.lists).load()
         if let media = drive.state.media, drive.state.blank { selectMedia(media) }
         // Development: `-addFolders "/path/one|/path/two"` pre-fills the new disc.
         if let list = UserDefaults.standard.string(forKey: "addFolders"), !list.isEmpty {
@@ -182,6 +188,32 @@ final class AppModel {
             }
         }
         return nil
+    }
+
+    /// The user's own title for a game: shown everywhere and used to search for its cover again.
+    func setTitle(_ text: String, for game: GameFolder) {
+        guard let i = draft.games.firstIndex(where: { $0.url == game.url }) else { return }
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        draft.games[i].customTitle = trimmed.isEmpty ? nil : trimmed
+        draft.games[i].lookedUp = false
+        let updated = draft.games[i]
+        thumbnails[updated.url] = nil
+        let service = infoService
+        Task {
+            let info: GameInfo?
+            if let typed = updated.customTitle {
+                info = await service.lookup(setupFile: nil, productName: typed, folderName: updated.name)
+            } else {
+                info = await service.lookup(setupFile: updated.setupFile, productName: updated.installer?.productName, folderName: updated.name)
+            }
+            if let j = draft.games.firstIndex(where: { $0.url == updated.url }) {
+                draft.games[j].info = info
+                draft.games[j].lookedUp = true
+            }
+            if let info, let file = await service.art(for: info).portrait, let image = NSImage(contentsOf: file) {
+                thumbnails[updated.url] = image
+            }
+        }
     }
 
     func setEdition(_ text: String, for game: GameFolder) {
@@ -304,6 +336,10 @@ final class AppModel {
 
     private func endSession(clearDraft: Bool) {
         session = nil
+        if clearDraft, let listID = draft.listID, var list = savedLists.first(where: { $0.id == listID }) {
+            list.burnedAt = Date()
+            store(list)
+        }
         if clearDraft {
             draft = DiscDraft(id: nextID(), media: draft.media, recoveryPercent: draft.recoveryPercent, speed: draft.speed)
         }
@@ -374,6 +410,83 @@ final class AppModel {
         let byURL = Dictionary(uniqueKeysWithValues: draft.games.map { ($0.url, $0) })
         draft.games = before.compactMap { byURL[$0] }
         orderBeforeOptimise = nil
+    }
+
+    // MARK: - Saved lists
+
+    /// A name for the current list: the one it was saved under, else its first few game titles.
+    var suggestedListName: String {
+        if let name = draft.listName { return name }
+        let titles = draft.games.prefix(3).map(\.title)
+        return titles.joined(separator: ", ") + (draft.games.count > 3 ? " +\(draft.games.count - 3)" : "")
+    }
+
+    /// Saves the New disc list. A list opened from Saved lists is updated in place.
+    func saveList(name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        let list = SavedList(id: draft.listID ?? UUID().uuidString, name: trimmed.isEmpty ? suggestedListName : trimmed,
+                             savedAt: Date(), burnedAt: nil, media: draft.media, speed: draft.speed, games: draft.games)
+        store(list)
+        draft.listID = list.id
+        draft.listName = list.name
+    }
+
+    /// Loads a saved list into New disc. Folders are read again, so moved or changed files show up.
+    func openList(_ list: SavedList) {
+        guard session == nil else { return }
+        screen = .newDisc
+        draft = DiscDraft(id: nextID(), media: list.media, recoveryPercent: draft.recoveryPercent, speed: list.speed,
+                          games: [], listID: list.id, listName: list.name)
+        orderBeforeOptimise = nil
+        Task {
+            var missing: [String] = []
+            for saved in list.games {
+                guard var game = try? await Task.detached(operation: { try GameFolder.scan(saved.url) }).value else {
+                    missing.append(saved.title)
+                    continue
+                }
+                game.info = saved.info
+                game.lookedUp = saved.lookedUp
+                game.edition = saved.edition
+                game.customTitle = saved.customTitle
+                draft.games.append(game)
+                if let image = cachedPortrait(game.info) { thumbnails[game.url] = image }
+                if game.info == nil { lookUp(game) }
+            }
+            if !missing.isEmpty {
+                alert = "These folders from \u{201C}\(list.name)\u{201D} are no longer there:\n" + missing.joined(separator: "\n")
+            }
+        }
+    }
+
+    func deleteList(_ list: SavedList) {
+        do {
+            try SavedListStore(folder: paths.lists).delete(list)
+        } catch {
+            alert = "Could not delete the list: \(error.localizedDescription)"
+        }
+        savedLists.removeAll { $0.id == list.id }
+        if draft.listID == list.id {
+            draft.listID = nil
+            draft.listName = nil
+        }
+    }
+
+    /// Empties New disc for a fresh list.
+    func clearDraft() {
+        guard session == nil else { return }
+        draft = DiscDraft(id: nextID(), media: draft.media, recoveryPercent: draft.recoveryPercent, speed: draft.speed)
+        orderBeforeOptimise = nil
+    }
+
+    private func store(_ list: SavedList) {
+        do {
+            try SavedListStore(folder: paths.lists).save(list)
+        } catch {
+            alert = "Could not save the list: \(error.localizedDescription)"
+        }
+        savedLists.removeAll { $0.id == list.id }
+        savedLists.insert(list, at: 0)
     }
 
     // MARK: - Catalogue
