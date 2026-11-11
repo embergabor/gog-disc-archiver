@@ -19,7 +19,7 @@ final class CoverPreviewTests: XCTestCase {
         func games(_ names: [String]) async throws -> [(GameFolder, GameInfo?)] {
             var out: [(GameFolder, GameInfo?)] = []
             for name in names {
-                let g = try GameFolder.scan(root.appendingPathComponent(name))
+                guard let g = try? GameFolder.scan(root.appendingPathComponent(name)) else { continue }
                 out.append((g, await service.lookup(setupFile: g.setupFile, productName: g.installer?.productName, folderName: g.name)))
             }
             return out
@@ -37,6 +37,7 @@ final class CoverPreviewTests: XCTestCase {
         let riddick = disc("GOG-001", try await games(["Chronicles of Riddick"]))
         // One disc of a split set: Witcher 3 part 1 of 3, the installer and the first parts.
         let witcherItems = try await games(["The Witcher 3 Wild Hunt"])
+        guard !witcherItems.isEmpty else { throw XCTSkip("no Witcher 3 folder") }
         var w = witcherItems[0].0
         w.files = Array(DiscPlanner.installOrder(w.files).prefix(6))
         var witcher = disc("GOG-002-1of3", [(w, witcherItems[0].1)], edition: "Next Gen")
@@ -54,5 +55,51 @@ final class CoverPreviewTests: XCTestCase {
             try png.write(to: folder.appendingPathComponent("bd-\(name).png"))
         }
         try CoverBuilder.writePDF(kind: .bluRay, discs: covers, to: folder.appendingPathComponent("Blu-ray cover previews.pdf"))
+
+        // The New disc screen with a collection disc, to check the live cover preview.
+        UserDefaults.standard.register(defaults: ["archiveRoot": folder.path])
+        let model = AppModel()
+        model.selectMedia(.bd25)
+        model.draft.id = "GOG-005"
+        for name in ["Gabriel Knight", "Gabriel Knight 2", "Gabriel Knight 3", "Fallout 2", "Arx Fatalis", "Chronicles of Riddick"] {
+            guard var g = try? GameFolder.scan(root.appendingPathComponent(name)) else { continue }
+            g.info = await service.lookup(setupFile: g.setupFile, productName: g.installer?.productName, folderName: g.name)
+            g.lookedUp = true
+            model.draft.games.append(g)
+        }
+        let host = NSHostingView(rootView: NewDiscView().environment(model).frame(width: 1100, height: 1100).background(Theme.window))
+        host.frame = CGRect(x: 0, y: 0, width: 1100, height: 1100)
+        let window = NSWindow(contentRect: CGRect(x: -4000, y: -4000, width: 1100, height: 1100), styleMask: [.borderless], backing: .buffered, defer: false)
+        window.contentView = host
+        window.orderFrontRegardless()
+        for _ in 0..<40 { RunLoop.main.run(until: Date().addingTimeInterval(0.1)); try await Task.sleep(nanoseconds: 50_000_000) }
+        let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds)!
+        host.cacheDisplay(in: host.bounds, to: rep)
+        window.orderOut(nil)
+        try rep.representation(using: .png, properties: [:])!.write(to: folder.appendingPathComponent("new-disc-preview.png"))
+    }
+}
+
+/// Renders cover backs for several game counts so overflow can be checked by eye. Needs COVER_PREVIEW_DIR.
+@MainActor
+final class BackFitTests: XCTestCase {
+    func testBackFitsManyGames() throws {
+        guard let out = ProcessInfo.processInfo.environment["COVER_PREVIEW_DIR"] else { throw XCTSkip("COVER_PREVIEW_DIR not set") }
+        var row: [AnyView] = []
+        for count in [6, 10, 14] {
+            let games = (1...count).map { i in
+                CoverGame(id: "g\(i)", title: "A Rather Long Game Title Number \(i): The Enhanced Edition", edition: nil,
+                          byline: "Some Developer Studio · 1999", genres: ["Role-playing", "Adventure", "Fantasy"],
+                          details: "v2.0.0.12 · Windows · Mac · 3.1 GB", summary: nil, portrait: nil, wide: nil)
+            }
+            let disc = CoverDisc(id: "GOG-001", idText: "GOG-001", partText: nil, media: "BD-R 25", burned: Date(), subtitle: "\(count) games",
+                                 facts: [("Burned", "2026.11.11"), ("Verified", "2026.11.11"), ("On disc", "checksums.sha256"), ("Install", "copy a game's folder")],
+                                 games: games, backdrop: nil)
+            row.append(AnyView(BDBack(disc: disc).border(Color.red, width: 0.5)))
+        }
+        let renderer = ImageRenderer(content: HStack(spacing: 10) { ForEach(0..<row.count, id: \.self) { row[$0] } }.padding(10).background(Color.white))
+        renderer.scale = 1.5
+        let png = NSBitmapImageRep(data: renderer.nsImage!.tiffRepresentation!)!.representation(using: .png, properties: [:])!
+        try png.write(to: URL(fileURLWithPath: out).appendingPathComponent("backs.png"))
     }
 }

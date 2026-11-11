@@ -5,7 +5,7 @@ import SwiftUI
 struct CoverPrintView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
-    var initial: [String]
+    var source: CoverSource
 
     @State private var kind: CoverKind = .bluRay
     @State private var selected: Set<String> = []
@@ -46,7 +46,7 @@ struct CoverPrintView: View {
         }
         .frame(width: 1000, height: 680)
         .background(Theme.window)
-        .task { if selected.isEmpty { selected = Set(initial) } }
+        .task { if selected.isEmpty { selected = Set(initialSelection) } }
         .task(id: selected) { await load() }
     }
 
@@ -82,12 +82,12 @@ struct CoverPrintView: View {
                 Text("Discs").font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.secondary)
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        ForEach(model.discs.sorted { $0.id.localizedStandardCompare($1.id) == .orderedDescending }) { disc in
+                        ForEach(rows, id: \.id) { disc in
                             Toggle(isOn: Binding(get: { selected.contains(disc.id) },
                                                  set: { on in if on { selected.insert(disc.id) } else { selected.remove(disc.id) } })) {
                                 HStack(spacing: 8) {
                                     Text(disc.label).font(Theme.mono(12))
-                                    Text(disc.games.map(\.title).joined(separator: ", "))
+                                    Text(disc.titles)
                                         .font(.system(size: 11))
                                         .foregroundStyle(Theme.secondary)
                                         .lineLimit(1)
@@ -123,8 +123,33 @@ struct CoverPrintView: View {
 
     // MARK: - Data
 
+    private struct Row { var id: String; var label: String; var titles: String }
+
+    private var rows: [Row] {
+        switch source {
+        case .catalogue:
+            return model.discs.sorted { $0.id.localizedStandardCompare($1.id) == .orderedDescending }
+                .map { Row(id: $0.id, label: $0.label, titles: $0.games.map(\.title).joined(separator: ", ")) }
+        case .plan(let discs, _, _, _):
+            return discs.map { Row(id: $0.id, label: $0.label + " · not burned yet", titles: $0.games.map(\.title).joined(separator: ", ")) }
+        }
+    }
+
+    private var initialSelection: [String] {
+        switch source {
+        case .catalogue(let ids): ids
+        case .plan(let discs, _, _, _): discs.map(\.id)
+        }
+    }
+
+    /// Plan order for planned discs (the burn order), ID order for burned ones.
+    private func order(_ ids: Set<String>) -> [String] {
+        if case .plan(let discs, _, _, _) = source { return discs.map(\.id).filter(ids.contains) }
+        return ids.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+    }
+
     private var ordered: [CoverDisc] {
-        selected.sorted { $0.localizedStandardCompare($1) == .orderedAscending }.compactMap { covers[$0] }
+        order(selected).compactMap { covers[$0] }
     }
 
     private var pages: [[CoverDisc]] { CoverBuilder.pages(kind: kind, discs: ordered) }
@@ -134,11 +159,19 @@ struct CoverPrintView: View {
     private func load() async {
         loading = true
         defer { loading = false }
-        for id in selected.sorted() where covers[id] == nil {
-            guard let record = model.disc(id) else { continue }
-            let updated = await CoverBuilder.withInfo(record, service: model.infoService)
-            if updated != record { model.upsert(updated) }
-            covers[id] = await CoverBuilder.disc(updated, service: model.infoService)
+        for id in order(selected) where covers[id] == nil {
+            switch source {
+            case .catalogue:
+                guard let record = model.disc(id) else { continue }
+                let updated = await CoverBuilder.withInfo(record, service: model.infoService)
+                if updated != record { model.upsert(updated) }
+                covers[id] = await CoverBuilder.disc(updated, service: model.infoService)
+            case .plan(let discs, let media, let speed, let recovery):
+                guard let planned = discs.first(where: { $0.id == id }) else { continue }
+                let record = CoverBuilder.record(for: planned, media: media, speed: speed, recoveryPercent: recovery)
+                let filled = await CoverBuilder.withInfo(record, service: model.infoService)
+                covers[id] = await CoverBuilder.disc(filled, service: model.infoService)
+            }
         }
     }
 

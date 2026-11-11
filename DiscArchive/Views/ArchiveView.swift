@@ -52,7 +52,7 @@ struct ArchiveView: View {
             ToolbarItem(placement: .status) { DriveBadge() }
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    model.coverRequest = model.selectedDisc.map { [$0] } ?? []
+                    model.coverRequest = .catalogue(model.selectedDisc.map { [$0] } ?? [])
                 } label: {
                     Label("Print covers…", systemImage: "printer")
                         .labelStyle(.titleAndIcon)

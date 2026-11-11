@@ -13,6 +13,9 @@ struct NewDiscView: View {
                 }
                 header
                 SpaceCard()
+                if !plan.isEmpty {
+                    CoverPreviewCard(plan: plan)
+                }
                 HStack(alignment: .top, spacing: 18) {
                     contents
                     SafetyCard()
@@ -27,6 +30,17 @@ struct NewDiscView: View {
         .toolbar {
             ToolbarItem(placement: .status) {
                 DriveBadge()
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    model.printDraftCovers()
+                } label: {
+                    Label("Print covers…", systemImage: "printer")
+                        .labelStyle(.titleAndIcon)
+                }
+                .buttonStyle(PillButtonStyle())
+                .disabled(plan.isEmpty)
+                .help("Print the covers now, before or while the discs burn")
             }
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -111,6 +125,15 @@ struct NewDiscView: View {
             ForEach(model.draft.games) { game in
                 GameRow(game: game, thumbnail: model.thumbnails[game.url], tag: tags[game.url],
                         edition: Binding(get: { game.edition ?? "" }, set: { model.setEdition($0, for: game) })) { model.remove(game) }
+                    .draggable(GameRow.reorderPrefix + game.url.path)
+                    .dropDestination(for: String.self) { items, _ in
+                        guard let item = items.first, item.hasPrefix(GameRow.reorderPrefix) else { return false }
+                        let path = String(item.dropFirst(GameRow.reorderPrefix.count))
+                        withAnimation(.easeOut(duration: 0.15)) {
+                            model.moveGame(URL(fileURLWithPath: path, isDirectory: true), before: game.url)
+                        }
+                        return true
+                    }
                 Divider().overlay(Theme.rowDivider)
             }
             dropZone
@@ -155,8 +178,15 @@ private struct GameRow: View {
     @Binding var edition: String
     var remove: () -> Void
 
+    /// Drag payload for reordering rows; plain URLs would look like new folders dropped from the Finder.
+    static let reorderPrefix = "discarchive-reorder:"
+
     var body: some View {
         HStack(spacing: 12) {
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.secondary)
+                .help("Drag to change the order: covers on the front and games on the back follow it")
             BoxArt(image: thumbnail, width: 28)
             VStack(alignment: .leading, spacing: 2) {
                 Text(game.title)
@@ -193,9 +223,10 @@ private struct GameRow: View {
             .foregroundStyle(Theme.secondary)
             .accessibilityLabel("Remove \(game.name)")
         }
-        .padding(.leading, 20)
+        .padding(.leading, 14)
         .padding(.trailing, 12)
         .frame(minHeight: 52)
+        .contentShape(Rectangle())
     }
 
     private var detail: String {
@@ -434,5 +465,69 @@ extension Array where Element: Hashable {
     func uniqued() -> [Element] {
         var seen = Set<Element>()
         return filter { seen.insert($0).inserted }
+    }
+}
+
+/// The front of every planned disc, live, so a collection disc can be arranged by eye.
+private struct CoverPreviewCard: View {
+    @Environment(AppModel.self) private var model
+    var plan: [PlannedDisc]
+    @State private var covers: [String: CoverDisc] = [:]
+
+    private static let scale: CGFloat = 0.55
+
+    var body: some View {
+        Card {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Cover preview").font(.system(size: 15, weight: .bold))
+                Text("Blu-ray case: back, spine, front · drag games in Contents to change the order")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.secondary)
+                Spacer()
+                Button("Print covers…") { model.printDraftCovers() }
+                    .buttonStyle(PillButtonStyle())
+            }
+            ScrollView(.horizontal, showsIndicators: plan.count > 4) {
+                HStack(alignment: .top, spacing: 14) {
+                    ForEach(plan) { disc in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Group {
+                                if let cover = covers[disc.id] {
+                                    BDWrapView(disc: cover)
+                                        .scaleEffect(Self.scale, anchor: .topLeading)
+                                } else {
+                                    Color(hex: 0x111111)
+                                }
+                            }
+                            .frame(width: BDWrap.size.width * Self.scale, height: BDWrap.size.height * Self.scale, alignment: .topLeading)
+                            .clipShape(RoundedRectangle(cornerRadius: 4))
+                            .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
+                            Text(disc.label).font(Theme.mono(11, .semibold)).foregroundStyle(Theme.muted)
+                        }
+                    }
+                }
+                .padding(.bottom, 4)
+            }
+        }
+        .task(id: signature) {
+            // Wait for typing and dragging to settle before rebuilding.
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            guard !Task.isCancelled else { return }
+            var built: [String: CoverDisc] = [:]
+            for disc in plan {
+                let record = CoverBuilder.record(for: disc, media: model.draft.media, speed: model.draft.speed,
+                                                 recoveryPercent: model.draft.effectiveRecovery(par2Available: model.par2Available))
+                built[disc.id] = await CoverBuilder.disc(record, service: model.infoService)
+                guard !Task.isCancelled else { return }
+            }
+            covers = built
+        }
+    }
+
+    /// Changes whenever something on a front would change.
+    private var signature: String {
+        plan.map { d in
+            d.label + ":" + d.games.map { "\($0.url.path)|\($0.info?.gogID ?? "-")|\($0.edition ?? "")" }.joined(separator: ",")
+        }.joined(separator: ";") + model.draft.media.rawValue
     }
 }

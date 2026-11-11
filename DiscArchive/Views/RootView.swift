@@ -18,7 +18,7 @@ struct RootView: View {
             Text(model.alert ?? "")
         }
         .sheet(isPresented: Binding(get: { model.coverRequest != nil }, set: { if !$0 { model.coverRequest = nil } })) {
-            CoverPrintView(initial: model.coverRequest ?? [])
+            CoverPrintView(source: model.coverRequest ?? .catalogue([]))
                 .environment(model)
         }
         .onChange(of: model.drive.state) { _, state in

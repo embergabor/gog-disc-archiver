@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct BurnView: View {
+    @Environment(AppModel.self) private var model
     var job: BurnJob
     @State private var confirmStop = false
 
@@ -42,6 +43,8 @@ struct BurnView: View {
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.secondary)
                     Spacer()
+                    Button("Print covers…") { model.printSessionCovers() }
+                        .buttonStyle(PillButtonStyle())
                     Button("Stop…", role: .destructive) { confirmStop = true }
                         .buttonStyle(PillButtonStyle(destructive: true))
                 }

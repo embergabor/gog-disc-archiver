@@ -22,7 +22,9 @@ Design canvas: https://claude.ai/artifact/7RWSCDsxvUxja4FTYAL93U
 - **Game info and covers:** each folder is matched in GOG's public catalog by its `setup_*.exe` name
   (the Steam Deck GOG installer's parsing and exact-match rules). Covers use portrait box art only:
   Steam's 600×900 library cover on an exact title match, else GOG's 342×482 cover, else one made from
-  GOG's wide art with the title on a band. Print covers (Archive → Print covers…) makes an A4 PDF:
+  GOG's wide art with the title on a band. Print covers (New disc, the burn screens, or Archive → Print covers…) makes an A4 PDF, also before
+  or while burning. New disc shows a live preview of each planned Blu-ray case; drag games in Contents to
+  change their order on the front grid and the back. The PDF:
   jewel case fronts (120 × 120 mm, two per sheet) or a Blu-ray 14 mm case wrap (271.7 × 148.4 mm)
   with box art and ID on the front (a grid of every game's cover on multi-game discs), ID on the spine,
   and the games with developer, year, genres, build, size and GOG's description on the back.

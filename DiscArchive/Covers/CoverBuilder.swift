@@ -9,13 +9,26 @@ enum CoverBuilder {
         var record = record
         for i in record.games.indices where record.games[i].info == nil {
             let game = record.games[i]
-            record.games[i].info = await service.lookup(setupFile: game.setupFile, folderName: game.folder)
+            record.games[i].info = await service.lookup(setupFile: game.setupFile, productName: game.installerTitle, folderName: game.folder)
             if record.games[i].version == nil, let setup = game.setupFile {
                 let v = InstallerName.parse(setup).version
                 record.games[i].version = v.isEmpty ? nil : v
             }
         }
         return record
+    }
+
+    /// A not-yet-burned disc as a catalogue record, so covers can be made before and during the burn.
+    /// Dated today; no checksums or read-back yet.
+    static func record(for disc: PlannedDisc, media: Media, speed: Int, recoveryPercent: Int) -> DiscRecord {
+        let games = disc.games.map { g in
+            GameRecord(folder: g.name, platforms: g.platforms,
+                       files: g.files.map { FileRecord(path: g.name + "/" + $0.relativePath, size: $0.size, sha256: "") },
+                       version: g.version, info: g.info, edition: g.edition, installerTitle: g.installer?.productName)
+        }
+        return DiscRecord(id: disc.id, volumeName: disc.volumeName, media: media, burnedAt: Date(), drive: "", speed: speed,
+                          recoveryPercent: recoveryPercent, games: games, recoveryFiles: [], checks: [],
+                          setID: disc.setID, part: disc.part, partCount: disc.partCount)
     }
 
     static func disc(_ record: DiscRecord, service: GameInfoService) async -> CoverDisc {
@@ -45,7 +58,7 @@ enum CoverBuilder {
         if let check = record.lastCheck {
             facts.append(("Verified", "\(DateText.day(check.date)) · \(check.filesOK) of \(check.filesTotal) files OK"))
         }
-        facts.append(("On disc", record.recoveryFiles.isEmpty ? "checksums.sha256" : "checksums.sha256 · par2 recovery \(record.recoveryPercent)%"))
+        facts.append(("On disc", record.recoveryPercent == 0 ? "checksums.sha256" : "checksums.sha256 · par2 recovery \(record.recoveryPercent)%"))
         let count = record.games.count
         var subtitle = "\(count == 1 ? "1 game" : "\(count) games") · \(ByteText.gb(record.gameBytes)) · \(record.media.label)"
         var partText: String?

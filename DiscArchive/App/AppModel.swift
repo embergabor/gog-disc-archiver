@@ -2,6 +2,12 @@ import AppKit
 import Foundation
 import Observation
 
+/// Discs for the Print covers sheet: burned ones from the catalogue, or planned ones before/while burning.
+enum CoverSource: Equatable {
+    case catalogue([String])
+    case plan([PlannedDisc], Media, Int, Int)
+}
+
 /// The disc being put together on the New disc screen.
 struct DiscDraft {
     var id: String
@@ -40,8 +46,8 @@ final class AppModel {
     var alert: String?
     /// Archive selection.
     var selectedDisc: String?
-    /// Disc IDs for the Print covers sheet; the sheet shows while this is set.
-    var coverRequest: [String]?
+    /// What the Print covers sheet shows; the sheet is open while this is set.
+    var coverRequest: CoverSource?
     /// Box art thumbnails for folders on the new disc.
     private(set) var thumbnails: [URL: NSImage] = [:]
     @ObservationIgnored private var artCache: [String: NSImage] = [:]
@@ -297,7 +303,27 @@ final class AppModel {
 
     func printCover(_ id: String) {
         showInArchive(id)
-        coverRequest = [id]
+        coverRequest = .catalogue([id])
+    }
+
+    /// Covers for the discs on the New disc screen, before burning.
+    func printDraftCovers() {
+        guard case .success(let plan) = draftPlan else { return }
+        coverRequest = .plan(plan, draft.media, draft.speed, draft.effectiveRecovery(par2Available: par2Available))
+    }
+
+    /// Covers for the discs being burned, while the burn runs.
+    func printSessionCovers() {
+        guard let session else { return }
+        coverRequest = .plan(session.discs, session.media, session.speed, session.recoveryPercent)
+    }
+
+    /// Moves a game on the new disc; the order is the order of covers on the front and games on the back.
+    func moveGame(_ url: URL, before target: URL) {
+        guard url != target, let from = draft.games.firstIndex(where: { $0.url == url }) else { return }
+        let game = draft.games.remove(at: from)
+        let to = draft.games.firstIndex(where: { $0.url == target }) ?? draft.games.count
+        draft.games.insert(game, at: to)
     }
 
     // MARK: - Catalogue

@@ -265,8 +265,9 @@ struct BDBack: View {
     var disc: CoverDisc
 
     var body: some View {
-        let single = disc.games.count == 1
-        let thumbW: CGFloat = disc.games.count <= 4 ? mm(15) : (disc.games.count <= 7 ? mm(11) : mm(8))
+        let count = disc.games.count
+        let single = count == 1
+        let thumbW: CGFloat = count <= 4 ? mm(15) : mm(8.5)
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
                 Text(disc.label).font(CoverStyle.mono(17)).tracking(1.2)
@@ -279,37 +280,49 @@ struct BDBack: View {
                 .padding(.top, 2)
             Rectangle().fill(CoverStyle.ink).frame(height: 1.5).padding(.top, 6).padding(.bottom, 2)
             ForEach(disc.games) { game in
-                HStack(alignment: .top, spacing: mm(3)) {
-                    Group {
-                        if let portrait = game.portrait {
-                            Image(nsImage: portrait).resizable().aspectRatio(contentMode: .fill)
-                        } else {
-                            Color(hex: 0xE6E6E6)
+                if count > 11 {
+                    oneLineRow(game)
+                } else if count >= 7 {
+                    compactRow(game, titleSize: 8.5)
+                } else {
+                    HStack(alignment: .top, spacing: mm(3)) {
+                        Group {
+                            if let portrait = game.portrait {
+                                Image(nsImage: portrait).resizable().aspectRatio(contentMode: .fill)
+                            } else {
+                                Color(hex: 0xE6E6E6)
+                            }
                         }
+                        .frame(width: thumbW, height: thumbW * 1.5)
+                        .clipped()
+                        VStack(alignment: .leading, spacing: 1.5) {
+                            Text(game.title).font(.system(size: 9.5, weight: .bold)).lineLimit(2)
+                            if count <= 4 {
+                                if !game.byline.isEmpty {
+                                    Text(game.byline).font(.system(size: 7.5)).foregroundStyle(CoverStyle.grey)
+                                }
+                                if !game.genres.isEmpty {
+                                    Text(game.genres.prefix(3).joined(separator: " · ")).font(.system(size: 7)).foregroundStyle(CoverStyle.grey)
+                                }
+                            } else {
+                                // 5–6 games: developer, year and genres share a line.
+                                Text(([game.byline] + game.genres.prefix(2)).filter { !$0.isEmpty }.joined(separator: " · "))
+                                    .font(.system(size: 7)).foregroundStyle(CoverStyle.grey).lineLimit(1)
+                            }
+                            Text(game.details).font(.system(size: 7)).foregroundStyle(CoverStyle.grey).lineLimit(2)
+                            if single, let summary = game.summary {
+                                Text(summary)
+                                    .font(.system(size: 7.5))
+                                    .lineSpacing(1)
+                                    .foregroundStyle(Color(hex: 0x222222))
+                                    .lineLimit(14)
+                                    .padding(.top, 4)
+                            }
+                        }
+                        Spacer(minLength: 0)
                     }
-                    .frame(width: thumbW, height: thumbW * 1.5)
-                    .clipped()
-                    VStack(alignment: .leading, spacing: 1.5) {
-                        Text(game.title).font(.system(size: 9.5, weight: .bold)).lineLimit(2)
-                        if !game.byline.isEmpty {
-                            Text(game.byline).font(.system(size: 7.5)).foregroundStyle(CoverStyle.grey)
-                        }
-                        if !game.genres.isEmpty {
-                            Text(game.genres.prefix(3).joined(separator: " · ")).font(.system(size: 7)).foregroundStyle(CoverStyle.grey)
-                        }
-                        Text(game.details).font(.system(size: 7)).foregroundStyle(CoverStyle.grey)
-                        if single, let summary = game.summary {
-                            Text(summary)
-                                .font(.system(size: 7.5))
-                                .lineSpacing(1)
-                                .foregroundStyle(Color(hex: 0x222222))
-                                .lineLimit(14)
-                                .padding(.top, 4)
-                        }
-                    }
-                    Spacer(minLength: 0)
+                    .padding(.vertical, count <= 4 ? 4 : 3)
                 }
-                .padding(.vertical, 4)
                 Rectangle().fill(CoverStyle.rule).frame(height: 0.5)
             }
             Spacer(minLength: 6)
@@ -328,6 +341,27 @@ struct BDBack: View {
         .padding(.vertical, mm(6.5))
         .frame(width: BDWrap.panel.width, height: BDWrap.panel.height, alignment: .topLeading)
         .background(CoverStyle.paper)
+    }
+}
+
+extension BDBack {
+    /// Seven or more games: two lines per game, no thumbnails, so up to about a dozen fit.
+    func compactRow(_ game: CoverGame, titleSize: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(game.title).font(.system(size: titleSize, weight: .bold)).lineLimit(1)
+            Text(([game.byline, game.details]).filter { !$0.isEmpty }.joined(separator: " · "))
+                .font(.system(size: 6.5)).foregroundStyle(CoverStyle.grey).lineLimit(1)
+        }
+        .padding(.vertical, 2.5)
+    }
+
+    /// Twelve or more games: one line each, title in bold.
+    func oneLineRow(_ game: CoverGame) -> some View {
+        (Text(game.title).font(.system(size: 7.5, weight: .bold))
+         + Text("  " + [game.byline, game.details].filter { !$0.isEmpty }.joined(separator: " · "))
+            .font(.system(size: 6.5)).foregroundColor(CoverStyle.grey))
+            .lineLimit(1)
+            .padding(.vertical, 2)
     }
 }
 

@@ -75,6 +75,8 @@ struct SetView: View {
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.secondary)
                     Spacer()
+                    Button("Print covers…") { model.printSessionCovers() }
+                        .buttonStyle(PillButtonStyle())
                     Button("Finish later") { model.finishLater() }
                         .buttonStyle(PillButtonStyle())
                     Button("Start \(target.label)") { start() }
