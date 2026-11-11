@@ -1,72 +1,90 @@
-# Disc Archive
+# GOG Disc Archiver
 
-A small macOS app for archiving game installers (GOG) to write-once DVD and Blu-ray discs.
-Design canvas: https://claude.ai/artifact/7RWSCDsxvUxja4FTYAL93U
+Back up your GOG game installers to Blu-ray and DVD, verify every file, and print matching case covers.
 
-## What v0.1 does
+![New disc](docs/screenshots/new-disc.png)
 
-- **New disc:** drop game folders, pick the media (DVD+R, DVD+R DL, BD-R 25/50, BDXL 100), see the plan.
-  Games that don't fit are split over several discs: files are never cut in half, a game too big for one
-  disc gets its own discs under one ID (`GOG-014 1/3` … `3/3`, volumes `GOG_014_1` …) that hold only that
-  game. Discs fill in your list order (drag to reorder); **Optimise order** rearranges the list for the
-  fewest discs when that saves one, with Undo. Between discs the app asks for the
-  next blank and starts by itself when one is inserted; **Finish later** keeps the rest of the set
-  (`~/Archive/pending.json`) to continue from the New disc screen.
-- **Burn:** checksums → recovery data → disc layout → burn → read back.
-  - SHA-256 for every file (`_archive/checksums.sha256`, `shasum -a 256 -c` compatible).
-  - par2 recovery data per game (5% or 10%), if `par2` is installed (`brew install par2`).
-  - Burns with Apple's DiscRecording framework straight from the folders: UDF, no disc image.
-  - Reads every file back from the disc and compares it before calling the disc safe.
-- **Saved lists:** Save list… keeps a prepared New disc list (order, titles, editions, disc type) in
-  `~/Archive/Lists` to burn later; open it from the sidebar. Burned lists are marked, not deleted.
-- **Titles:** the pencil on a game sets your own title (shown everywhere, used to search for the cover).
-- **Archive:** catalogue of burned discs in `~/Archive/discs.json`, search by game name,
-  re-check an old disc (insert it, the check starts when it mounts). Due every 3 years.
+## What it does
 
-- **Game info and covers:** each folder is matched in GOG's public catalog by its `setup_*.exe` name
-  (the Steam Deck GOG installer's parsing and exact-match rules). Covers use portrait box art only:
-  Steam's 600×900 library cover on an exact title match, else GOG's 342×482 cover, else one made from
-  GOG's wide art with the title on a band. Print covers (New disc, the burn screens, or Archive → Print covers…) makes an A4 PDF, also before
-  or while burning. New disc shows a live preview of each planned Blu-ray case; drag games in Contents to
-  change their order on the front grid and the back. The PDF:
-  a folding jewel case booklet (240 × 120 mm, games inside, box art front; fold in half, one-sided printing) or a Blu-ray 14 mm case wrap (271.7 × 148.4 mm)
-  with box art and ID on the front (a grid of every game's cover on multi-game discs), ID on the spine,
-  and the games with developer, year, genres, build, size and GOG's description on the back.
+- **Burns GOG installer folders** straight to BD-R (25/50/100 GB) or DVD+R, no disc image needed.
+- **Verifies every disc:** checksums are taken before burning, and every file is read back and compared afterwards.
+- **Splits big games** across several discs; smaller games share a disc in the order you choose.
+- **Keeps a catalogue** of your discs: search for a game to find which disc it's on, and re-check old discs every few years.
+- **Prints covers** with box art and game details: Blu-ray case, jewel case booklet, or jewel front with tray card.
 
-Checksums and recovery files for each disc are also kept in `~/Archive/Sets/<ID>/`; game info and art
-in `~/Archive/Info/`, cover PDFs in `~/Archive/Covers/`.
+## Requirements
 
-## Disc layout
+- macOS 14 or later
+- A Blu-ray or DVD burner (USB burners work)
+- Blank BD-R or DVD+R discs
 
-```
-<Game folder>/...            the game's files, as they were
-_archive/checksums.sha256
-_archive/disc.json           this disc's catalogue record
-_archive/recovery/*.par2     recovery data, one set per game
-_archive/README.txt          how to install, check and repair by hand
-```
+## Install
 
-## Build
+Download the latest version from [Releases](../../releases), unzip it and move **GOG Disc Archiver** to your Applications folder.
+
+## How to use
+
+### 1. Add games
+
+Open **New disc** and drop your game folders onto **Contents**, or click **Add folder…**. Use one folder per game, holding the game's `setup_*.exe` and `.bin` files as downloaded from GOG.
+
+Each game is identified from its installer, and its cover art and details are looked up automatically. If a game isn't found, click the pencil next to its title and type the title yourself.
+
+### 2. Choose the discs
+
+Pick the disc type at the top (DVD+R, BD-R 25, BD-R 50 or BDXL 100). The space bar shows what fits.
+
+- Games fill the discs in the order of the list. Drag games to reorder them.
+- If a game is too big for one disc, it gets discs of its own (for example `GOG-014 1/3` to `3/3`).
+- **Optimise order** appears when rearranging the list would save a disc.
+- **Edition** lets you label a release, for example "Next Gen".
+
+![Cover preview](docs/screenshots/cover-preview.png)
+
+### 3. Save the list (optional)
+
+**Save list…** keeps the games, their order and labels so you can burn them later. Saved lists appear in the sidebar.
+
+### 4. Print the covers
+
+**Print covers…** works before, during or after burning.
+
+- Choose **Blu-ray case**, **Jewel booklet** (fold in half) or **Jewel front + tray**.
+- **Ink saver** makes the front white.
+- **Brighten box art for print** keeps dark covers from printing as solid ink.
+
+Print at 100% (turn off *Scale to fit*), then cut along the dotted lines.
+
+![Covers](docs/screenshots/covers.png)
+
+### 5. Burn
+
+Insert a blank disc and click **Burn**. The app takes checksums, burns the disc and then reads every file back. Don't eject the disc or unplug the drive until it says the disc is safe.
+
+For multi-disc sets, insert the next blank when asked. **Finish later** keeps the rest of the set for another day.
+
+![Burning](docs/screenshots/burning.png)
+
+### 6. Find and check your discs
+
+**All discs** lists everything you've burned. Search for a game to see which disc it's on. **Check disc** re-reads an old disc to make sure every file is still intact. A check every few years is a good habit.
+
+![Archive](docs/screenshots/archive.png)
+
+## Installing a game from disc
+
+Copy the game's folder to your computer and run its `setup_*.exe`. For a game split over several discs, copy its folder from every disc into one folder first.
+
+Each disc also holds an `_archive` folder with checksums, so you can verify it on any computer:
 
 ```bash
-xcodebuild -project DiscArchive.xcodeproj -scheme DiscArchive -configuration Debug -derivedDataPath build/dd build
+shasum -a 256 -c _archive/checksums.sha256
 ```
 
-Tests (`-only-testing:DiscArchiveTests/SnapshotTests` with `TEST_RUNNER_SNAPSHOT_DIR=<folder>` renders screens to PNG):
+## Where things are kept
 
-```bash
-xcodebuild -project DiscArchive.xcodeproj -scheme DiscArchive -configuration Debug -derivedDataPath build/dd test
-```
+Everything lives in `~/Archive`: the disc catalogue (`discs.json`), saved lists, downloaded cover art and cover PDFs.
 
-macOS 14+, no App Sandbox (it needs the burner and `par2`), signed with the Apple Development team.
+---
 
-## Development launch arguments
-
-- `-simulateBurn <folder>`: "burns" by copying the disc layout into a folder, so the whole flow works without a drive.
-- `-archiveRoot <folder>`: use another folder than `~/Archive` for the catalogue and sets.
-- `-addFolders "/path/a|/path/b"`: pre-fill the new disc.
-
-## Not yet
-
-Second copy,
-repair from recovery data inside the app. Not yet tried with a real burner and blank disc.
+Not affiliated with GOG.com or CD PROJEKT. GOG is a trademark of CD PROJEKT S.A.
