@@ -77,6 +77,18 @@ final class CoverPreviewTests: XCTestCase {
         host.cacheDisplay(in: host.bounds, to: rep)
         window.orderOut(nil)
         try rep.representation(using: .png, properties: [:])!.write(to: folder.appendingPathComponent("new-disc-preview.png"))
+
+        // The enlarged cover view.
+        let zoomHost = NSHostingView(rootView: CoverZoomView(covers: covers, selected: covers[2].id, print: {}).frame(width: 1300, height: 820))
+        zoomHost.frame = CGRect(x: 0, y: 0, width: 1300, height: 820)
+        let zoomWindow = NSWindow(contentRect: CGRect(x: -4000, y: -4000, width: 1300, height: 820), styleMask: [.borderless], backing: .buffered, defer: false)
+        zoomWindow.contentView = zoomHost
+        zoomWindow.orderFrontRegardless()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.6))
+        let zoomRep = zoomHost.bitmapImageRepForCachingDisplay(in: zoomHost.bounds)!
+        zoomHost.cacheDisplay(in: zoomHost.bounds, to: zoomRep)
+        zoomWindow.orderOut(nil)
+        try zoomRep.representation(using: .png, properties: [:])!.write(to: folder.appendingPathComponent("zoom.png"))
     }
 }
 

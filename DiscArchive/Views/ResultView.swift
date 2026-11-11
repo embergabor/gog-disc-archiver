@@ -107,7 +107,7 @@ struct ResultView: View {
 
     private var stepsSummary: some View {
         Card {
-            ForEach(job.steps) { step in
+            ForEach(job.steps.filter { Features.recovery || $0.id != .recovery }) { step in
                 HStack {
                     Text(step.title).font(.system(size: 13, weight: .semibold))
                     Spacer()
@@ -180,7 +180,7 @@ struct DiscFacts: View {
             ("Media", record.media.longName),
             ("Contents", "\(record.games.count) games · \(ByteText.gb(record.gameBytes))"),
             ("Safety data", record.recoveryFiles.isEmpty
-                ? "checksums.sha256 · no recovery data"
+                ? (Features.recovery ? "checksums.sha256 · no recovery data" : "checksums.sha256 for every file")
                 : "checksums.sha256 · par2 recovery \(record.recoveryPercent)% (\(ByteText.gb(record.recoveryBytes)))"),
             ("Burned", "\(DateText.dayTime(record.burnedAt)) at \(record.speed)× · \(record.drive)"),
         ]

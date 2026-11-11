@@ -246,7 +246,7 @@ private struct SpaceCard: View {
 
     var body: some View {
         let draft = model.draft
-        let percent = draft.effectiveRecovery(par2Available: model.par2Available)
+        let percent = draft.effectiveRecovery(par2Available: model.recoveryEnabled)
         let plan = (try? model.draftPlan.get()) ?? []
         let cap = draft.media.capacity
         let games = draft.gameBytes
@@ -311,7 +311,9 @@ private struct SpaceCard: View {
             }
             HStack(spacing: 18) {
                 legend(Theme.accent, "Games \(ByteText.gb(games))")
-                legend(Theme.accent.opacity(0.45), model.par2Available ? "Recovery data \(ByteText.gb(recovery))" : "Recovery data off (par2 not installed)")
+                if Features.recovery {
+                    legend(Theme.accent.opacity(0.45), model.par2Available ? "Recovery data \(ByteText.gb(recovery))" : "Recovery data off (par2 not installed)")
+                }
                 if plan.count <= 1 {
                     legend(Theme.track, "Free \(ByteText.gb(max(0, draft.media.usable - games - recovery)))")
                 }
@@ -319,7 +321,7 @@ private struct SpaceCard: View {
             .font(.system(size: 12))
             .foregroundStyle(Theme.muted)
             if plan.count > 1 {
-                Label("Discs fill in your list order: when the next game doesn't fit, a new disc starts. A game too big for one disc gets discs of its own under one ID (1/5 … 5/5), and its last disc is never topped up with other games. Files are never cut in half. Each disc has its own checksums and recovery data. To install a split game, copy its folder from every disc into one folder.",
+                Label("Discs fill in your list order: when the next game doesn't fit, a new disc starts. A game too big for one disc gets discs of its own under one ID (1/5 … 5/5), and its last disc is never topped up with other games. Files are never cut in half. Each disc has its own checksums. To install a split game, copy its folder from every disc into one folder.",
                       systemImage: "info.circle")
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.muted)
@@ -358,6 +360,7 @@ private struct SafetyCard: View {
         @Bindable var model = model
         Card {
             Text("Safety").font(.system(size: 15, weight: .bold))
+            if Features.recovery {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Recovery data").font(.system(size: 13, weight: .semibold))
                 PillPicker(options: [(0, "Off"), (5, "5%"), (10, "10%")], selection: $model.draft.recoveryPercent)
@@ -369,9 +372,10 @@ private struct SafetyCard: View {
                     .foregroundStyle(Theme.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            }
             check("Checksums on the disc", "SHA-256 for every file, always on")
             check("Read back after burning", "Every file is re-read from the disc and compared, always on")
-            check("Burns straight from the folders", "No disc image, so no extra space beyond the recovery data")
+            check("Burns straight from the folders", "No disc image, so no extra space is needed")
             HStack {
                 Text("Burn speed").font(.system(size: 13, weight: .semibold))
                 Spacer()
@@ -499,6 +503,7 @@ private struct CoverPreviewCard: View {
     @Environment(AppModel.self) private var model
     var plan: [PlannedDisc]
     @State private var covers: [String: CoverDisc] = [:]
+    @State private var enlarged: String?
 
     private static let scale: CGFloat = 0.55
 
@@ -506,7 +511,7 @@ private struct CoverPreviewCard: View {
         Card {
             HStack(alignment: .firstTextBaseline) {
                 Text("Cover preview").font(.system(size: 15, weight: .bold))
-                Text("Blu-ray case: back, spine, front · drag games in Contents to change the order")
+                Text("Blu-ray case: back, spine, front · click to enlarge · drag games in Contents to change the order")
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.secondary)
                 Spacer()
@@ -516,23 +521,40 @@ private struct CoverPreviewCard: View {
             ScrollView(.horizontal, showsIndicators: plan.count > 4) {
                 HStack(alignment: .top, spacing: 14) {
                     ForEach(plan) { disc in
-                        VStack(alignment: .leading, spacing: 6) {
-                            Group {
-                                if let cover = covers[disc.id] {
-                                    BDWrapView(disc: cover)
-                                        .scaleEffect(Self.scale, anchor: .topLeading)
-                                } else {
-                                    Color(hex: 0x111111)
+                        Button {
+                            if covers[disc.id] != nil { enlarged = disc.id }
+                        } label: {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Group {
+                                    if let cover = covers[disc.id] {
+                                        BDWrapView(disc: cover)
+                                            .scaleEffect(Self.scale, anchor: .topLeading)
+                                    } else {
+                                        Color(hex: 0x111111)
+                                    }
                                 }
+                                .frame(width: BDWrap.size.width * Self.scale, height: BDWrap.size.height * Self.scale, alignment: .topLeading)
+                                .clipShape(RoundedRectangle(cornerRadius: 4))
+                                .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
+                                HStack(spacing: 6) {
+                                    Text(disc.label).font(Theme.mono(11, .semibold))
+                                    Image(systemName: "arrow.up.left.and.arrow.down.right").font(.system(size: 10))
+                                }
+                                .foregroundStyle(Theme.muted)
                             }
-                            .frame(width: BDWrap.size.width * Self.scale, height: BDWrap.size.height * Self.scale, alignment: .topLeading)
-                            .clipShape(RoundedRectangle(cornerRadius: 4))
-                            .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
-                            Text(disc.label).font(Theme.mono(11, .semibold)).foregroundStyle(Theme.muted)
+                            .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
+                        .help("Click to see this cover larger")
                     }
                 }
                 .padding(.bottom, 4)
+            }
+        }
+        .sheet(isPresented: Binding(get: { enlarged != nil }, set: { if !$0 { enlarged = nil } })) {
+            CoverZoomView(covers: plan.compactMap { covers[$0.id] }, selected: enlarged ?? plan.first?.id ?? "") {
+                enlarged = nil
+                model.printDraftCovers()
             }
         }
         .task(id: signature) {
@@ -542,7 +564,7 @@ private struct CoverPreviewCard: View {
             var built: [String: CoverDisc] = [:]
             for disc in plan {
                 let record = CoverBuilder.record(for: disc, media: model.draft.media, speed: model.draft.speed,
-                                                 recoveryPercent: model.draft.effectiveRecovery(par2Available: model.par2Available))
+                                                 recoveryPercent: model.draft.effectiveRecovery(par2Available: model.recoveryEnabled))
                 built[disc.id] = await CoverBuilder.disc(record, service: model.infoService)
                 guard !Task.isCancelled else { return }
             }
@@ -555,5 +577,75 @@ private struct CoverPreviewCard: View {
         plan.map { d in
             d.label + ":" + d.games.map { "\($0.url.path)|\($0.info?.gogID ?? "-")|\($0.edition ?? "")" }.joined(separator: ",")
         }.joined(separator: ";") + model.draft.media.rawValue
+    }
+}
+
+/// One cover large: the Blu-ray case or the jewel case front, with arrows between discs.
+struct CoverZoomView: View {
+    @Environment(\.dismiss) private var dismiss
+    var covers: [CoverDisc]
+    @State var selected: String
+    var print: () -> Void
+    @State private var kind: CoverKind = .bluRay
+
+    var body: some View {
+        let index = covers.firstIndex { $0.id == selected } ?? 0
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                Text(covers.indices.contains(index) ? covers[index].label : "")
+                    .font(Theme.mono(15))
+                if covers.count > 1 {
+                    Text("\(index + 1) of \(covers.count)").font(.system(size: 12)).foregroundStyle(Theme.secondary)
+                }
+                Spacer()
+                PillPicker(options: [(CoverKind.bluRay, "Blu-ray case"), (CoverKind.jewel, "Jewel front")], selection: $kind)
+                if covers.count > 1 {
+                    Button { step(-1, from: index) } label: { Image(systemName: "chevron.left") }
+                        .buttonStyle(PillButtonStyle())
+                        .keyboardShortcut(.leftArrow, modifiers: [])
+                        .disabled(index == 0)
+                    Button { step(1, from: index) } label: { Image(systemName: "chevron.right") }
+                        .buttonStyle(PillButtonStyle())
+                        .keyboardShortcut(.rightArrow, modifiers: [])
+                        .disabled(index >= covers.count - 1)
+                }
+                Button("Print covers…") { print() }
+                    .buttonStyle(PillButtonStyle())
+                Button("Done") { dismiss() }
+                    .buttonStyle(PillButtonStyle(prominent: true))
+                    .keyboardShortcut(.cancelAction)
+            }
+            .padding(16)
+            Divider()
+            GeometryReader { geo in
+                let size = kind == .bluRay ? BDWrap.size : JewelFront.size
+                let scale = min(geo.size.width / size.width, geo.size.height / size.height, 2.2)
+                Group {
+                    if covers.indices.contains(index) {
+                        Group {
+                            if kind == .bluRay {
+                                BDWrapView(disc: covers[index])
+                            } else {
+                                JewelFront(disc: covers[index])
+                            }
+                        }
+                        .scaleEffect(scale, anchor: .topLeading)
+                        .frame(width: size.width * scale, height: size.height * scale, alignment: .topLeading)
+                        .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
+                    }
+                }
+                .frame(width: geo.size.width, height: geo.size.height)
+            }
+            .padding(24)
+            .background(Theme.track)
+        }
+        .frame(minWidth: 1000, idealWidth: 1300, minHeight: 640, idealHeight: 820)
+        .background(Theme.window)
+    }
+
+    private func step(_ delta: Int, from index: Int) {
+        let next = index + delta
+        guard covers.indices.contains(next) else { return }
+        selected = covers[next].id
     }
 }

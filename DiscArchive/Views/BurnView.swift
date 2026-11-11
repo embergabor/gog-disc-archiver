@@ -12,7 +12,7 @@ struct BurnView: View {
                     ProgressRing(value: job.overall)
                         .frame(width: 168, height: 168)
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Step \(job.stepNumber) of \(job.steps.count) · \(job.current?.title ?? "Starting")")
+                        Text("Step \(stepNumber) of \(visibleSteps.count) · \(job.current?.title ?? "Starting")")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(Theme.ink)
                         Text("\(Int((job.overall * 100).rounded()))%")
@@ -28,9 +28,9 @@ struct BurnView: View {
                 }
 
                 VStack(spacing: 0) {
-                    ForEach(job.steps) { step in
-                        StepRow(step: step, number: step.id.rawValue + 1, fraction: job.fraction)
-                        if step.id != job.steps.last?.id {
+                    ForEach(visibleSteps) { step in
+                        StepRow(step: step, number: (visibleSteps.firstIndex { $0.id == step.id } ?? 0) + 1, fraction: job.fraction)
+                        if step.id != visibleSteps.last?.id {
                             Divider().overlay(Theme.rowDivider)
                         }
                     }
@@ -63,6 +63,16 @@ struct BurnView: View {
                  ? "The burn has started. Stopping now leaves this disc unusable."
                  : "Nothing has been written to the disc yet.")
         }
+    }
+
+    /// The recovery step is hidden while that feature is off.
+    private var visibleSteps: [BurnJob.Step] {
+        Features.recovery ? job.steps : job.steps.filter { $0.id != .recovery }
+    }
+
+    private var stepNumber: Int {
+        guard let current = job.current else { return 1 }
+        return (visibleSteps.firstIndex { $0.id == current.id } ?? 0) + 1
     }
 
     private var stepLine: String {

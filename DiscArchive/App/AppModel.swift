@@ -2,6 +2,12 @@ import AppKit
 import Foundation
 import Observation
 
+/// Switches for features that are built but not shown yet.
+enum Features {
+    /// par2 recovery data: hidden for now (user, 2026-11-11). The code stays; flip to bring it back.
+    static let recovery = false
+}
+
 /// Discs for the Print covers sheet: burned ones from the catalogue, or planned ones before/while burning.
 enum CoverSource: Equatable {
     case catalogue([String])
@@ -93,9 +99,11 @@ final class AppModel {
     }
 
     var par2Available: Bool { par2 != nil }
+    /// Recovery data is made only when the feature is on and par2 is installed.
+    var recoveryEnabled: Bool { Features.recovery && par2Available }
     var job: BurnJob? { session?.job }
 
-    var draftPlan: Result<[PlannedDisc], DiscPlanner.PlanError> { draft.plan(par2Available: par2Available) }
+    var draftPlan: Result<[PlannedDisc], DiscPlanner.PlanError> { draft.plan(par2Available: recoveryEnabled) }
 
     /// IDs already used by the catalogue or by an unfinished set.
     private var usedIDs: [String] { discs.map(\.baseID) + DiscPlanner.baseIDs(pending?.discs ?? []) }
@@ -221,14 +229,14 @@ final class AppModel {
     func startBurn() {
         guard burnBlocker == nil, case .success(let plan) = draftPlan else { return }
         session = BurnSession(discs: plan, media: draft.media, speed: draft.speed,
-                              recoveryPercent: draft.effectiveRecovery(par2Available: par2Available))
+                              recoveryPercent: draft.effectiveRecovery(par2Available: recoveryEnabled))
         startCurrentDisc()
     }
 
     /// Burns the session's current disc (the first, the next after a swap, or a retry).
     func startCurrentDisc() {
         guard let session, session.job?.isRunning != true, let writer = makeWriter() else { return }
-        session.start(writer: writer, par2: par2, paths: paths) { [weak self] record in
+        session.start(writer: writer, par2: recoveryEnabled ? par2 : nil, paths: paths) { [weak self] record in
             self?.upsert(record)
         }
     }
@@ -313,7 +321,7 @@ final class AppModel {
     /// Covers for the discs on the New disc screen, before burning.
     func printDraftCovers() {
         guard case .success(let plan) = draftPlan else { return }
-        coverRequest = .plan(plan, draft.media, draft.speed, draft.effectiveRecovery(par2Available: par2Available))
+        coverRequest = .plan(plan, draft.media, draft.speed, draft.effectiveRecovery(par2Available: recoveryEnabled))
     }
 
     /// Covers for the discs being burned, while the burn runs.
@@ -333,7 +341,7 @@ final class AppModel {
 
     /// The list order that needs the fewest discs.
     private var optimisedGames: [GameFolder] {
-        DiscPlanner.optimisedOrder(games: draft.games, media: draft.media, percent: draft.effectiveRecovery(par2Available: par2Available))
+        DiscPlanner.optimisedOrder(games: draft.games, media: draft.media, percent: draft.effectiveRecovery(par2Available: recoveryEnabled))
     }
 
     /// How many discs Optimise would save (0 when the list order is already as good).
@@ -341,7 +349,7 @@ final class AppModel {
         guard draft.games.count > 1, case .success(let now) = draftPlan else { return 0 }
         var trial = draft
         trial.games = optimisedGames
-        guard case .success(let better) = trial.plan(par2Available: par2Available) else { return 0 }
+        guard case .success(let better) = trial.plan(par2Available: recoveryEnabled) else { return 0 }
         return max(0, now.count - better.count)
     }
 

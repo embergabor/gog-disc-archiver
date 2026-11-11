@@ -76,8 +76,10 @@ private struct Sidebar: View {
         .safeAreaInset(edge: .bottom) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Catalogue: " + abbreviate(model.paths.catalogue.path))
-                Text("Recovery data: " + abbreviate(model.paths.sets.path))
-                if !model.par2Available {
+                if Features.recovery {
+                    Text("Recovery data: " + abbreviate(model.paths.sets.path))
+                }
+                if Features.recovery && !model.par2Available {
                     Text("par2 not installed: no recovery data")
                         .foregroundStyle(Tone.warn.foreground)
                 }
