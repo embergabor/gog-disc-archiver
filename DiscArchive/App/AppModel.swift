@@ -182,7 +182,7 @@ final class AppModel {
         if let hit = artCache[info.gogID] { return hit }
         let folder = infoService.artRoot.appendingPathComponent(info.gogID)
         for ext in ["jpg", "png"] {
-            if let image = NSImage(contentsOf: folder.appendingPathComponent("portrait." + ext)) {
+            if let image = NSImage(contentsOf: folder.appendingPathComponent(GameInfoService.portraitName(info) + "." + ext)) {
                 artCache[info.gogID] = image
                 return image
             }

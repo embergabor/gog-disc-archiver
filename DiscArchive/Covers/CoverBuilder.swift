@@ -77,7 +77,8 @@ enum CoverBuilder {
             facts.append(("Install", "copy a game's folder to your drive and run setup_*.exe"))
         }
         return CoverDisc(id: record.id, idText: record.setID ?? record.id, partText: partText, media: record.media.label, burned: record.burnedAt,
-                         subtitle: subtitle, facts: facts, games: games, backdrop: CoverStyle.backdrop(from: source))
+                         subtitle: subtitle, facts: facts, games: games, backdrop: CoverStyle.backdrop(from: source),
+                         grayArt: CoverStyle.grayArt(from: source))
     }
 
     /// "installer + parts 1–5", "parts 6–10", or the file count when the names don't follow GOG's pattern.

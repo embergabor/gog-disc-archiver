@@ -65,9 +65,15 @@ struct GameInfoService: Sendable {
         parts.queryItems = [URLQueryItem(name: "search", value: term)]
         let html = String(decoding: try await Self.get(parts.url!), as: UTF8.self)
         let wanted = Set(names.map(InstallerName.normalize))
-        return Self.parseGogDB(html).first { row in
-            relaxed ? Self.looseMatch(row.title, wanted) : wanted.contains(InstallerName.normalize(row.title))
-        }?.id
+        let rows = Self.parseGogDB(html)
+        if relaxed { return Self.single(rows.filter { Self.looseMatch($0.title, wanted) })?.id }
+        return rows.first { wanted.contains(InstallerName.normalize($0.title)) }?.id
+    }
+
+    /// The only loose candidate, or none: "Fallout" loosely fits both "Fallout: New Vegas" and
+    /// "Fallout: A Post Nuclear Role Playing Game", and a wrong cover is worse than none.
+    static func single<T>(_ candidates: [T]) -> T? {
+        candidates.count == 1 ? candidates[0] : nil
     }
 
     /// A store title whose part before " - " ("The Elder Scrolls IV: Oblivion") or before ":"
@@ -195,7 +201,7 @@ struct GameInfoService: Sendable {
         let page = try JSONDecoder().decode(CatalogPage.self, from: data)
         let exact = names.lazy.compactMap { Self.matchCatalog($0, products: page.products) }.first
         let wanted = Set(names.map(InstallerName.normalize))
-        let loose = relaxed ? page.products.first { Self.looseMatch($0.title ?? "", wanted) } : nil
+        let loose = relaxed ? Self.single(page.products.filter { Self.looseMatch($0.title ?? "", wanted) }) : nil
         guard let p = relaxed ? loose : exact else { return nil }
         return GameInfo(gogID: p.id,
                         title: InstallerName.cleanStoreTitle(p.title ?? name),
@@ -268,8 +274,11 @@ struct GameInfoService: Sendable {
             struct Item: Decodable { var type: String?; var name: String?; var id: Int }
             var items: [Item]
         }
-        return try JSONDecoder().decode(Search.self, from: data).items
-            .first { $0.type == "app" && (relaxed ? Self.looseMatch($0.name ?? "", wanted) : wanted.contains(InstallerName.normalize($0.name ?? ""))) }?.id
+        let apps = try JSONDecoder().decode(Search.self, from: data).items.filter { $0.type == "app" }
+        // Steam names often add a colon subtitle that is a different game ("Fallout" → "Fallout: New Vegas"),
+        // so for Steam only an edition suffix after " - " or " — " may be dropped.
+        if relaxed { return Self.single(apps.filter { wanted.contains(InstallerName.normalize(Self.baseTitle($0.name ?? ""))) })?.id }
+        return apps.first { wanted.contains(InstallerName.normalize($0.name ?? "")) }?.id
     }
 
     // MARK: - Art
@@ -294,7 +303,7 @@ struct GameInfoService: Sendable {
             portraitSources.append(Self.verticalCover(gog.absoluteString) ?? gog)
             portraitSources.append(URL(string: gog.absoluteString.replacingOccurrences(of: "_glx_vertical_cover", with: "")) ?? gog)
         }
-        art.portrait = await download(portraitSources, to: folder.appendingPathComponent("portrait"))
+        art.portrait = await download(portraitSources, to: folder.appendingPathComponent(Self.portraitName(info)))
         if let wide = info.coverHorizontal {
             art.wide = await download([wide], to: folder.appendingPathComponent("wide"))
         }
@@ -315,6 +324,11 @@ struct GameInfoService: Sendable {
         return nil
     }
 
+    /// "portrait-steam292030" or "portrait-gog": the file changes when the source does.
+    static func portraitName(_ info: GameInfo) -> String {
+        "portrait-" + (info.steamAppID.map { "steam\($0)" } ?? "gog")
+    }
+
     static func imageExtension(_ data: Data) -> String? {
         if data.starts(with: [0x89, 0x50, 0x4E, 0x47]) { return "png" }
         if data.starts(with: [0xFF, 0xD8, 0xFF]) { return "jpg" }
@@ -323,8 +337,11 @@ struct GameInfoService: Sendable {
 
     // MARK: - Cache and HTTP
 
+    /// Bumped when matching rules change, so older (possibly wrong) lookups are made again.
+    static let cacheVersion = "v3"
+
     private func cacheFile(_ key: String) -> URL {
-        cacheRoot.appendingPathComponent(key + ".json")
+        cacheRoot.appendingPathComponent(Self.cacheVersion, isDirectory: true).appendingPathComponent(key + ".json")
     }
 
     private func cached(_ key: String) -> GameInfo? {
@@ -333,7 +350,7 @@ struct GameInfoService: Sendable {
     }
 
     private func store(_ info: GameInfo, key: String) {
-        try? FileManager.default.createDirectory(at: cacheRoot, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(at: cacheFile(key).deletingLastPathComponent(), withIntermediateDirectories: true)
         if let data = try? JSONEncoder().encode(info) { try? data.write(to: cacheFile(key), options: .atomic) }
     }
 

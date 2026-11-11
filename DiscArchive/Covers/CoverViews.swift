@@ -32,10 +32,49 @@ struct CoverDisc: Identifiable {
     var games: [CoverGame]
     /// Blurred, darkened art behind the front.
     var backdrop: NSImage?
+    /// Black-and-white art for the duotone backdrop.
+    var grayArt: NSImage? = nil
 
     var spineText: String {
         guard games.count == 1 else { return "\(games.count) games" }
         return games[0].title + (games[0].edition.map { " · " + $0 } ?? "")
+    }
+}
+
+/// The cover's colours and what sits behind the box art on the front.
+struct CoverTheme: Equatable {
+    enum Backdrop: String, CaseIterable { case blur, flat, rings, duotone }
+
+    /// Spine, the front's surround and its ID band.
+    var base: Color
+    var baseText: Color
+    /// Lighter shade used to tint the duotone backdrop.
+    var baseLight: Color
+    /// Back panel: ID, titles and the rule under the header.
+    var backAccent: Color
+    var backdrop: Backdrop
+
+    /// The original look: black spine and band, blurred art behind the covers.
+    static let classic = CoverTheme(base: Color(hex: 0x111111), baseText: .white, baseLight: Color(hex: 0x888888),
+                                    backAccent: Color(hex: 0x111111), backdrop: .blur)
+
+    static let purpleBase = Color(hex: 0x4B2A7F)
+    static let purpleLight = Color(hex: 0xC3B4E6)
+
+    static func purple(_ backdrop: Backdrop, purpleBack: Bool = false) -> CoverTheme {
+        CoverTheme(base: purpleBase, baseText: .white, baseLight: purpleLight,
+                   backAccent: purpleBack ? purpleBase : Color(hex: 0x111111), backdrop: backdrop)
+    }
+}
+
+private struct CoverThemeKey: EnvironmentKey {
+    static let defaultValue = CoverTheme.classic
+}
+
+extension EnvironmentValues {
+    var coverTheme: CoverTheme {
+        get { self[CoverThemeKey.self] }
+        set { self[CoverThemeKey.self] = newValue }
     }
 }
 
@@ -55,6 +94,36 @@ enum CoverStyle {
         guard let out = CIContext().createCGImage(blurred, from: input.extent) else { return nil }
         return NSImage(cgImage: out, size: NSSize(width: cg.width, height: cg.height))
     }
+
+    /// Black-and-white, softened copy of the art for the duotone backdrop, made once as a bitmap.
+    static func grayArt(from image: NSImage?) -> NSImage? {
+        guard let image, let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        let input = CIImage(cgImage: cg)
+        let gray = input.applyingFilter("CIColorControls", parameters: [kCIInputSaturationKey: 0, kCIInputContrastKey: 0.85])
+        guard let out = CIContext().createCGImage(gray, from: input.extent) else { return nil }
+        return NSImage(cgImage: out, size: NSSize(width: cg.width, height: cg.height))
+    }
+}
+
+/// Thin concentric rings, like the grooves of a disc, drawn as vector lines.
+struct DiscRings: View {
+    var size: CGSize
+    var color: Color
+
+    var body: some View {
+        let center = CGPoint(x: size.width / 2, y: size.height / 2)
+        let maxR = hypot(size.width, size.height) / 2
+        Path { p in
+            var r: CGFloat = 14
+            while r < maxR {
+                p.addEllipse(in: CGRect(x: center.x - r, y: center.y - r, width: 2 * r, height: 2 * r))
+                r += 3.2
+            }
+        }
+        .stroke(color.opacity(0.12), lineWidth: 0.5)
+        .frame(width: size.width, height: size.height)
+        .clipped()
+    }
 }
 
 // MARK: - Front
@@ -63,18 +132,37 @@ enum CoverStyle {
 struct FrontArt: View {
     var disc: CoverDisc
     var size: CGSize
+    @Environment(\.coverTheme) private var theme
 
     var body: some View {
         ZStack {
-            CoverStyle.ink
-            if let backdrop = disc.backdrop {
-                Image(nsImage: backdrop)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: size.width, height: size.height)
-                    .clipped()
-                    .contentShape(Rectangle())
-                Color.black.opacity(0.35)
+            theme.base
+            switch theme.backdrop {
+            case .blur:
+                if let backdrop = disc.backdrop {
+                    Image(nsImage: backdrop)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: size.width, height: size.height)
+                        .clipped()
+                        .contentShape(Rectangle())
+                    Color.black.opacity(0.35)
+                }
+            case .flat:
+                EmptyView()
+            case .rings:
+                DiscRings(size: size, color: theme.baseText)
+            case .duotone:
+                if let gray = disc.grayArt {
+                    Image(nsImage: gray)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: size.width, height: size.height)
+                        .clipped()
+                        .contentShape(Rectangle())
+                        .colorMultiply(theme.baseLight)
+                        .opacity(0.4)
+                }
             }
             content
         }
@@ -176,6 +264,7 @@ struct IDBand: View {
     var disc: CoverDisc
     var width: CGFloat
     var height: CGFloat
+    @Environment(\.coverTheme) private var theme
 
     var body: some View {
         HStack(alignment: .center) {
@@ -183,7 +272,7 @@ struct IDBand: View {
                 Text("GOG ARCHIVE")
                     .font(.system(size: 6.5, weight: .semibold))
                     .tracking(1.2)
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(theme.baseText.opacity(0.75))
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(disc.idText)
                         .font(CoverStyle.mono(height * 0.42))
@@ -192,7 +281,7 @@ struct IDBand: View {
                         Text(part).font(CoverStyle.mono(height * 0.3))
                     }
                 }
-                .foregroundStyle(.white)
+                .foregroundStyle(theme.baseText)
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
@@ -200,11 +289,11 @@ struct IDBand: View {
                 Text(DateText.day(disc.burned))
             }
             .font(.system(size: 7.5, weight: .medium))
-            .foregroundStyle(.white.opacity(0.85))
+            .foregroundStyle(theme.baseText.opacity(0.85))
         }
         .padding(.horizontal, mm(5))
         .frame(width: width, height: height)
-        .background(CoverStyle.ink)
+        .background(theme.base)
     }
 }
 
@@ -245,10 +334,11 @@ struct BDFront: View {
 /// Reads bottom to top, as on European cases.
 struct BDSpine: View {
     var disc: CoverDisc
+    @Environment(\.coverTheme) private var theme
 
     var body: some View {
         ZStack {
-            CoverStyle.ink
+            theme.base
             // The title starts as large as the ID and shrinks only as far as it must to fit the spine.
             HStack(spacing: 10) {
                 Text(disc.label).font(CoverStyle.mono(15)).tracking(1.5)
@@ -260,7 +350,7 @@ struct BDSpine: View {
                     .minimumScaleFactor(0.3)
                 Spacer(minLength: 0)
             }
-            .foregroundStyle(.white)
+            .foregroundStyle(theme.baseText)
             .frame(width: BDWrap.panel.height - mm(12))
             .rotationEffect(.degrees(-90))
         }
@@ -275,6 +365,7 @@ struct BDSpine: View {
 struct BackPanel: View {
     var disc: CoverDisc
     var size: CGSize
+    @Environment(\.coverTheme) private var theme
 
     /// How much room there is compared with the Blu-ray back.
     private var room: CGFloat { size.height / BDWrap.panel.height }
@@ -304,6 +395,7 @@ struct BackPanel: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
                 Text(disc.label).font(CoverStyle.mono(room < 0.9 ? 15 : 17)).tracking(1.2)
+                    .foregroundStyle(theme.backAccent)
                 Spacer()
                 Text("CONTENTS").font(.system(size: 6.5, weight: .semibold)).tracking(1.2).foregroundStyle(CoverStyle.grey)
             }
@@ -311,7 +403,7 @@ struct BackPanel: View {
                 .font(.system(size: 7.5))
                 .foregroundStyle(CoverStyle.grey)
                 .padding(.top, 2)
-            Rectangle().fill(CoverStyle.ink).frame(height: 1.5).padding(.top, 6).padding(.bottom, 2)
+            Rectangle().fill(theme.backAccent).frame(height: 1.5).padding(.top, 6).padding(.bottom, 2)
             ForEach(disc.games) { game in
                 switch style {
                 case .oneLine: lineRow(game, wrap: false, small: true)
@@ -350,6 +442,7 @@ struct BackPanel: View {
             .clipped()
             VStack(alignment: .leading, spacing: 1.5) {
                 Text(game.title).font(.system(size: 9.5, weight: .bold))
+                    .foregroundStyle(theme.backAccent)
                     .fixedSize(horizontal: false, vertical: true)
                 if style == .full {
                     if !game.byline.isEmpty {
@@ -385,6 +478,7 @@ struct BackPanel: View {
     private func twoLineRow(_ game: CoverGame) -> some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(game.title).font(.system(size: 8.5, weight: .bold))
+                .foregroundStyle(theme.backAccent)
                 .fixedSize(horizontal: false, vertical: true)
             Text([game.byline, game.details].filter { !$0.isEmpty }.joined(separator: " · "))
                 .font(.system(size: 6.5)).foregroundStyle(CoverStyle.grey)
@@ -395,7 +489,7 @@ struct BackPanel: View {
 
     /// Title in bold followed by the details; wraps onto further lines, or is cut to one line as a last resort.
     private func lineRow(_ game: CoverGame, wrap: Bool, small: Bool) -> some View {
-        (Text(game.title).font(.system(size: small ? 7 : 7.5, weight: .bold))
+        (Text(game.title).font(.system(size: small ? 7 : 7.5, weight: .bold)).foregroundColor(theme.backAccent)
          + Text("  " + [game.byline, game.details].filter { !$0.isEmpty }.joined(separator: " · "))
             .font(.system(size: small ? 6 : 6.5)).foregroundColor(CoverStyle.grey))
             .lineLimit(wrap ? nil : 1)
