@@ -63,8 +63,7 @@ struct CoverPrintView: View {
                                 .foregroundStyle(kind == option ? Theme.ink : Theme.secondary)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(option.label).font(.system(size: 13, weight: .semibold))
-                                Text(option == .jewel ? "Folding booklet, 240 × 120 mm: games and details inside, box art and ID on the front. Fold in half, no double-sided printing."
-                                                      : "Box art and ID on the front, ID on the spine, games and disc details on the back.")
+                                Text(option.explanation)
                                     .font(.system(size: 11))
                                     .foregroundStyle(Theme.secondary)
                                     .fixedSize(horizontal: false, vertical: true)
@@ -190,7 +189,7 @@ struct CoverPrintView: View {
     private var fileName: String {
         let ids = ordered.map(\.id)
         let name = ids.count <= 3 ? ids.joined(separator: " ") : "\(ids.first!) to \(ids.last!)"
-        return "\(name) \(kind == .jewel ? "jewel" : "bluray") cover.pdf"
+        return "\(name) \(kind.fileWord) cover.pdf"
     }
 
     private func write(to url: URL) -> Bool {

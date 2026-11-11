@@ -540,6 +540,50 @@ struct BDBack: View {
     var body: some View { BackPanel(disc: disc, size: BDWrap.panel) }
 }
 
+/// Jewel case tray inlay, 151 × 118 mm: the back panel (games and details) between two 6.5 mm spines
+/// that fold up along the sides of the tray. Both spines read bottom to top from outside the case.
+struct JewelTray: View {
+    var disc: CoverDisc
+    static let spine = mm(6.5)
+    static let size = CGSize(width: mm(151), height: mm(118))
+
+    var body: some View {
+        HStack(spacing: 0) {
+            TraySpine(disc: disc)
+            BackPanel(disc: disc, size: CGSize(width: Self.size.width - 2 * Self.spine, height: Self.size.height))
+            TraySpine(disc: disc)
+        }
+        .frame(width: Self.size.width, height: Self.size.height)
+    }
+}
+
+/// A narrow jewel case spine: ID and title, the title shrinking only as far as it must.
+struct TraySpine: View {
+    var disc: CoverDisc
+    @Environment(\.coverTheme) private var theme
+
+    var body: some View {
+        ZStack {
+            theme.spineBase
+            HStack(spacing: 7) {
+                Text(disc.label).font(CoverStyle.mono(8.5)).tracking(0.8)
+                    .fixedSize()
+                    .layoutPriority(1)
+                Text(disc.spineText)
+                    .font(.system(size: 8.5, weight: .bold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.4)
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(theme.spineText)
+            .frame(width: JewelTray.size.height - mm(8))
+            .rotationEffect(.degrees(-90))
+        }
+        .frame(width: JewelTray.spine, height: JewelTray.size.height)
+        .clipped()
+    }
+}
+
 /// Jewel case booklet, printed flat: the inside panel (games and details) left, the front right.
 /// Fold in half along the middle so the front faces out.
 struct JewelBooklet: View {
@@ -572,13 +616,49 @@ struct BDWrapView: View {
 // MARK: - Print sheets (A4)
 
 enum CoverKind: String, CaseIterable, Identifiable {
-    case jewel, bluRay
+    case jewel, jewelTray, bluRay
     var id: String { rawValue }
 
     var label: String {
         switch self {
         case .jewel: "Jewel case booklet"
+        case .jewelTray: "Jewel case front + tray"
         case .bluRay: "Blu-ray case 14 mm"
+        }
+    }
+
+    /// One line for the Print covers sheet.
+    var explanation: String {
+        switch self {
+        case .jewel: "Folding booklet, 240 × 120 mm: games and details inside, box art and ID on the front. Fold in half, no double-sided printing."
+        case .jewelTray: "Front insert (120 × 120 mm) and the tray card behind the disc (151 × 118 mm) with games and details, and the ID on both spines."
+        case .bluRay: "Box art and ID on the front, ID on the spine, games and disc details on the back."
+        }
+    }
+
+    var fileWord: String {
+        switch self {
+        case .jewel: "jewel booklet"
+        case .jewelTray: "jewel front and tray"
+        case .bluRay: "bluray"
+        }
+    }
+
+    /// The whole printed piece, for previews.
+    var pieceSize: CGSize {
+        switch self {
+        case .jewel: JewelBooklet.size
+        case .jewelTray: CGSize(width: JewelFront.size.width + mm(12) + JewelTray.size.width, height: JewelFront.size.height)
+        case .bluRay: BDWrap.size
+        }
+    }
+
+    /// Short name for pickers.
+    var shortLabel: String {
+        switch self {
+        case .jewel: "Jewel booklet"
+        case .jewelTray: "Jewel front + tray"
+        case .bluRay: "Blu-ray case"
         }
     }
 
@@ -590,6 +670,7 @@ enum CoverKind: String, CaseIterable, Identifiable {
     var note: String {
         switch self {
         case .jewel: "Jewel case booklet · 240 × 120 mm, folds to 120 × 120 · print at 100% on A4 · cut on the corner marks, fold at the middle marks so the front faces out"
+        case .jewelTray: "Jewel case front 120 × 120 mm and tray inlay 151 × 118 mm (6.5 mm spines) · print at 100% on A4 · cut on the corner marks, fold the tray's spines at the marks"
         case .bluRay: "Blu-ray case cover, 14 mm spine · 271.7 × 148.4 mm · print at 100% on A4 · cut on the corner marks, fold at the spine marks"
         }
     }
@@ -599,10 +680,11 @@ enum CoverKind: String, CaseIterable, Identifiable {
 struct CropMarks: View {
     var size: CGSize
     var folds: [CGFloat] = []
+    var gap: CGFloat = 6
+    var len: CGFloat = 14
 
     var body: some View {
         Path { p in
-            let gap: CGFloat = 6, len: CGFloat = 14
             let w = size.width, h = size.height
             for (x, y, dx, dy) in [(0.0, 0.0, -1.0, -1.0), (w, 0.0, 1.0, -1.0), (0.0, h, -1.0, 1.0), (w, h, 1.0, 1.0)] {
                 p.move(to: CGPoint(x: x + dx * gap, y: y)); p.addLine(to: CGPoint(x: x + dx * (gap + len), y: y))
@@ -631,6 +713,16 @@ struct CoverSheet: View {
                 if let disc = discs.first {
                     JewelBooklet(disc: disc)
                         .overlay(CropMarks(size: JewelBooklet.size, folds: [JewelFront.size.width]))
+                }
+            case .jewelTray:
+                if let disc = discs.first {
+                    // Shorter marks so the two pieces fit side by side on A4.
+                    HStack(alignment: .center, spacing: mm(12)) {
+                        JewelFront(disc: disc)
+                            .overlay(CropMarks(size: JewelFront.size, gap: 4, len: 10))
+                        JewelTray(disc: disc)
+                            .overlay(CropMarks(size: JewelTray.size, folds: [JewelTray.spine, JewelTray.size.width - JewelTray.spine], gap: 4, len: 10))
+                    }
                 }
             case .bluRay:
                 if let disc = discs.first {

@@ -676,7 +676,7 @@ struct CoverZoomView: View {
                 Toggle("Ink saver", isOn: $inkSaver)
                     .toggleStyle(.switch)
                     .help("White front with purple text and rings; the spine stays purple")
-                PillPicker(options: [(CoverKind.bluRay, "Blu-ray case"), (CoverKind.jewel, "Jewel booklet")], selection: $kind)
+                PillPicker(options: [CoverKind.bluRay, .jewel, .jewelTray].map { ($0, $0.shortLabel) }, selection: $kind)
                 if covers.count > 1 {
                     Button { step(-1, from: index) } label: { Image(systemName: "chevron.left") }
                         .buttonStyle(PillButtonStyle())
@@ -696,15 +696,19 @@ struct CoverZoomView: View {
             .padding(16)
             Divider()
             GeometryReader { geo in
-                let size = kind == .bluRay ? BDWrap.size : JewelBooklet.size
+                let size = kind.pieceSize
                 let scale = min(geo.size.width / size.width, geo.size.height / size.height, 2.2)
                 Group {
                     if covers.indices.contains(index) {
                         Group {
-                            if kind == .bluRay {
-                                BDWrapView(disc: covers[index])
-                            } else {
-                                JewelBooklet(disc: covers[index])
+                            switch kind {
+                            case .bluRay: BDWrapView(disc: covers[index])
+                            case .jewel: JewelBooklet(disc: covers[index])
+                            case .jewelTray:
+                                HStack(alignment: .center, spacing: mm(12)) {
+                                    JewelFront(disc: covers[index])
+                                    JewelTray(disc: covers[index])
+                                }
                             }
                         }
                         .environment(\.coverTheme, .purple(inkSaver: inkSaver))

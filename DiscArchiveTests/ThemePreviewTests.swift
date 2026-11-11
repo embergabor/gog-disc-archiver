@@ -42,13 +42,8 @@ final class ThemePreviewTests: XCTestCase {
         }
         let sheet = VStack(alignment: .leading, spacing: 18) {
             Text("Chosen design: purple spine, disc-groove rings, purple on white back").font(.system(size: 20, weight: .bold))
-            item("Standard · multi-game", BDWrapView(disc: multi).environment(\.coverTheme, .purple(inkSaver: false)))
-            item("Ink saver · multi-game", BDWrapView(disc: multi).environment(\.coverTheme, .purple(inkSaver: true)))
-            item("Ink saver · single game", BDWrapView(disc: single).environment(\.coverTheme, .purple(inkSaver: true)))
-            HStack(alignment: .top, spacing: 18) {
-                item("Jewel booklet · standard", JewelBooklet(disc: single).environment(\.coverTheme, .purple(inkSaver: false)))
-                item("Jewel booklet · ink saver", JewelBooklet(disc: multi).environment(\.coverTheme, .purple(inkSaver: true)))
-            }
+            item("Jewel front + tray · standard · multi-game", CoverSheet(kind: .jewelTray, discs: [multi]).environment(\.coverTheme, .purple(inkSaver: false)))
+            item("Jewel front + tray · ink saver · single game", CoverSheet(kind: .jewelTray, discs: [single]).environment(\.coverTheme, .purple(inkSaver: true)))
         }
         .padding(24)
         .background(Color(hex: 0xF4F4F4))
@@ -56,6 +51,7 @@ final class ThemePreviewTests: XCTestCase {
         let renderer = ImageRenderer(content: sheet)
         renderer.scale = 1.4
         let png = NSBitmapImageRep(data: renderer.nsImage!.tiffRepresentation!)!.representation(using: .png, properties: [:])!
-        try png.write(to: folder.appendingPathComponent("theme-chosen.png"))
+        try png.write(to: folder.appendingPathComponent("jewel-tray.png"))
+        try CoverBuilder.writePDF(kind: .jewelTray, discs: [multi, single], to: folder.appendingPathComponent("Jewel front and tray.pdf"))
     }
 }
