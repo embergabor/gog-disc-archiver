@@ -111,7 +111,7 @@ enum CoverStyle {
     static let ink = Color(hex: 0x111111)
     static let paper = Color.white
     static let grey = Color(hex: 0x555555)
-    static let rule = Color(hex: 0xBDBDBD)
+    static let rule = Color(hex: 0xBCBCBC)
 
     static func mono(_ size: CGFloat) -> Font { .system(size: size, weight: .heavy, design: .monospaced) }
 
@@ -448,7 +448,7 @@ struct BackPanel: View {
                 case .twoLine: twoLineRow(game)
                 case .full, .medium: richRow(game, style: style)
                 }
-                Rectangle().fill(CoverStyle.rule).frame(height: 0.5)
+                Rectangle().fill(CoverStyle.rule).frame(height: 1)
             }
             Spacer(minLength: 6)
             Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 2) {
@@ -593,7 +593,7 @@ struct JewelBooklet: View {
     var body: some View {
         HStack(spacing: 0) {
             BackPanel(disc: disc, size: JewelFront.size)
-            Rectangle().fill(Color(hex: 0xE0E0E0)).frame(width: 0.5)
+            Rectangle().fill(Color(hex: 0xD0D0D0)).frame(width: 0.8)
             JewelFront(disc: disc)
         }
         .frame(width: Self.size.width, height: Self.size.height)
