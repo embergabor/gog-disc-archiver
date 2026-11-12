@@ -94,6 +94,10 @@ shasum -a 256 -c _archive/checksums.sha256
 
 Everything lives in `~/Archive`: the disc catalogue (`discs.json`), saved lists, downloaded cover art and cover PDFs.
 
+## Licence
+
+MIT, see [LICENSE](LICENSE).
+
 ---
 
 Not affiliated with GOG.com or CD PROJEKT. GOG is a trademark of CD PROJEKT S.A.
