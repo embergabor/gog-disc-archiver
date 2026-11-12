@@ -4,6 +4,8 @@ Back up your GOG game installers to Blu-ray and DVD, verify every file, and prin
 
 ![New disc](docs/screenshots/new-disc.png)
 
+![The finished jewel case for GOG-002](docs/photos/jewel-case-front.jpg)
+
 ## What it does
 
 - **Burns GOG installer folders** straight to BD-R (25/50/100 GB) or DVD+R, no disc image needed.
@@ -56,6 +58,11 @@ Pick the disc type at the top (DVD+R, BD-R 25, BD-R 50 or BDXL 100). The space b
 Print at 100% (turn off *Scale to fit*), then cut along the dotted lines.
 
 ![Covers](docs/screenshots/covers.png)
+
+<p>
+  <img src="docs/photos/printed-covers.jpg" alt="Printed jewel front and tray card, ready to cut" width="49%">
+  <img src="docs/photos/jewel-case-back.jpg" alt="Tray card in the back of the jewel case" width="49%">
+</p>
 
 ### 5. Burn
 
