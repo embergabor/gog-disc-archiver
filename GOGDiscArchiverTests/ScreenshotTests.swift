@@ -73,15 +73,31 @@ final class ScreenshotTests: XCTestCase {
         window.title = "All discs"
         try await snap(window, to: folder.appendingPathComponent("archive.png"), wait: 2)
         window.close()
+
+        // 6. The whole GOG download folder on BD-R 50: how games spread over several discs.
+        model.screen = .newDisc
+        model.clearDraft()
+        model.selectMedia(.bd50)
+        let all = try FileManager.default.contentsOfDirectory(at: games, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles])
+            .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
+            .sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
+        model.addFolders(all)
+        for _ in 0..<900 where model.draft.games.count < all.count || model.draft.games.contains(where: { !$0.lookedUp }) || model.thumbnails.count < model.draft.games.count {
+            try await Task.sleep(nanoseconds: 100_000_000)
+        }
+        let tall = makeWindow(model, height: 1180)
+        tall.title = "New disc"
+        try await snap(tall, to: folder.appendingPathComponent("multi-disc.png"), wait: 4)
+        tall.close()
     }
 
-    private func makeWindow(_ model: AppModel) -> NSWindow {
-        let controller = NSHostingController(rootView: RootView().environment(model).frame(width: 1280, height: 820))
+    private func makeWindow(_ model: AppModel, height: CGFloat = 820) -> NSWindow {
+        let controller = NSHostingController(rootView: RootView().environment(model).frame(width: 1280, height: height))
         controller.sceneBridgingOptions = [.toolbars, .title]
         let window = NSWindow(contentViewController: controller)
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
         window.toolbarStyle = .unified
-        window.setContentSize(NSSize(width: 1280, height: 820))
+        window.setContentSize(NSSize(width: 1280, height: height))
         window.setFrameOrigin(NSPoint(x: 40, y: 40))
         window.orderFrontRegardless()
         return window

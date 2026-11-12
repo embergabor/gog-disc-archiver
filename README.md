@@ -41,6 +41,8 @@ Pick the disc type at the top (DVD+R, BD-R 25, BD-R 50 or BDXL 100). The space b
 - **Optimise order** appears when rearranging the list would save a disc.
 - **Edition** lets you label a release, for example "Next Gen".
 
+![A whole GOG library planned over six BD-R 50 discs](docs/screenshots/multi-disc.png)
+
 ![Cover preview](docs/screenshots/cover-preview.png)
 
 ### 3. Save the list (optional)
