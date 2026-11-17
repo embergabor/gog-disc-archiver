@@ -58,6 +58,7 @@ xcodebuild -project GOGDiscArchiver.xcodeproj -scheme GOGDiscArchiver -configura
 - **No disc images:** burn straight from the folders via DiscRecording. Burning stops if a source file changed size after it was added.
 - **Covers:** purple design (#4B2A7F) with disc-groove rings. Ink saver = white front. "Brighten box art for print" is on by default. The jewel booklet is one-sided (no duplex printer). Print at 100%, with dotted cut lines and crop marks.
 
-## Pending
+## Releases
 
-- `scripts/release.sh` (checklist in RELEASE.md): archive, export with Developer ID, notarize (`notarytool` keychain profile `notary`), staple, zip (the README says "unzip"), then `gh release create v0.1`. Waiting until the user has created the Developer ID Application certificate (on developer.apple.com via a CSR, because Xcode's "+" fails) and stored the notary credentials.
+- `scripts/release.sh [--publish]` (steps in RELEASE.md) archives with the Developer ID certificate, notarizes (keychain profile `notary`), staples and zips to `dist/`. `--publish` also creates a **draft** GitHub release `v<MARKETING_VERSION>`; the user writes the notes and publishes it.
+- Publishing a release is outward-facing: run `--publish` only when the user asks for a release.
