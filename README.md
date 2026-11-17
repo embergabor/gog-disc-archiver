@@ -16,7 +16,7 @@ Back up your GOG game installers to Blu-ray and DVD, verify every file, and prin
 
 ## Requirements
 
-- macOS 14 or later
+- macOS 14 or later, on Intel or Apple Silicon
 - A Blu-ray or DVD burner (USB burners work)
 - Blank BD-R or DVD+R discs
 
