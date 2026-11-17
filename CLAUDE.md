@@ -60,4 +60,4 @@ xcodebuild -project GOGDiscArchiver.xcodeproj -scheme GOGDiscArchiver -configura
 
 ## Pending
 
-- `scripts/release.sh`: archive, export with Developer ID, notarize (`notarytool` keychain profile `notary`), staple, build a DMG, then `gh release create v0.1`. Waiting until the user has created the Developer ID Application certificate (on developer.apple.com via a CSR, because Xcode's "+" fails) and stored the notary credentials.
+- `scripts/release.sh` (checklist in RELEASE.md): archive, export with Developer ID, notarize (`notarytool` keychain profile `notary`), staple, zip (the README says "unzip"), then `gh release create v0.1`. Waiting until the user has created the Developer ID Application certificate (on developer.apple.com via a CSR, because Xcode's "+" fails) and stored the notary credentials.
