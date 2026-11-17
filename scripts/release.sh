@@ -10,6 +10,9 @@ cd "$(dirname "$0")/.."
 PUBLISH=0
 [[ "${1:-}" == "--publish" ]] && PUBLISH=1
 
+# Port 22 to GitHub can time out on this network; fetch over 443 unless told otherwise.
+export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh -o Hostname=ssh.github.com -o Port=443 -o HostKeyAlias=github.com -o BatchMode=yes -o ConnectTimeout=15}"
+
 APP_NAME="GOG Disc Archiver"
 TEAM=679574875X
 OUT=build/release
