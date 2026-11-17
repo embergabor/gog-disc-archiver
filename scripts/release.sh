@@ -1,7 +1,7 @@
 #!/bin/bash
-# Builds a Developer ID-signed, notarized GOG Disc Archiver and zips it into dist/.
-#   scripts/release.sh            build, sign, notarize, staple, zip
-#   scripts/release.sh --publish  the same, then create a DRAFT GitHub release with the zip
+# Builds a Developer ID-signed, notarized GOG Disc Archiver and packs it into a notarized DMG in dist/.
+#   scripts/release.sh            build, sign, notarize, staple, DMG
+#   scripts/release.sh --publish  the same, then create a DRAFT GitHub release with the DMG
 # Needs: "Developer ID Application" certificate in the keychain, notarytool profile "notary", gh login.
 # The version comes from MARKETING_VERSION in the Xcode project (tag v<version>).
 set -euo pipefail
@@ -19,6 +19,19 @@ OUT=build/release
 step() { printf '\n==> %s\n' "$*"; }
 fail() { printf 'error: %s\n' "$*" >&2; exit 1; }
 
+# notarize <file> <name>: submit to Apple, wait, print Apple's log on rejection.
+notarize() {
+  local json="$OUT/notary-$2.json" id
+  xcrun notarytool submit "$1" --keychain-profile notary --wait --output-format json > "$json" || true
+  id=$(sed -n 's/.*"id"[^"]*"\([^"]*\)".*/\1/p' "$json" | head -1)
+  if ! grep -q '"status"[^"]*"Accepted"' "$json"; then
+    cat "$json"; echo
+    [[ -n "$id" ]] && xcrun notarytool log "$id" --keychain-profile notary
+    fail "notarization of $2 not accepted"
+  fi
+  echo "accepted ($id)"
+}
+
 step "Checks"
 [[ -z "$(git status --porcelain)" ]] || fail "uncommitted changes; commit first"
 grep -q "Developer ID Application: .*($TEAM)" <<<"$(security find-identity -v -p codesigning)" || fail "no Developer ID Application certificate for $TEAM"
@@ -27,7 +40,7 @@ VERSION=$(xcodebuild -project GOGDiscArchiver.xcodeproj -scheme GOGDiscArchiver 
 BUILD=$(xcodebuild -project GOGDiscArchiver.xcodeproj -scheme GOGDiscArchiver -configuration Release -showBuildSettings 2>/dev/null | awk -F' = ' '/ CURRENT_PROJECT_VERSION /{print $2; exit}')
 [[ -n "$VERSION" ]] || fail "could not read MARKETING_VERSION"
 TAG="v$VERSION"
-ZIP="dist/GOG-Disc-Archiver-$VERSION.zip"
+DMG="dist/GOG-Disc-Archiver-$VERSION.dmg"
 echo "version $VERSION (build $BUILD), commit $(git rev-parse --short HEAD)"
 if (( PUBLISH )); then
   git fetch -q origin
@@ -51,31 +64,35 @@ grep -q "Authority=Developer ID Application" <<<"$SIG" || fail "not signed with 
 grep -q "flags=.*runtime" <<<"$SIG" || fail "hardened runtime is off"
 grep -q "Timestamp=" <<<"$SIG" || fail "signature has no secure timestamp"
 
-step "Notarize (usually a few minutes)"
-ditto -c -k --keepParent "$APP" "$OUT/notarize.zip"
-xcrun notarytool submit "$OUT/notarize.zip" --keychain-profile notary --wait --output-format json > "$OUT/notary.json" || true
-ID=$(sed -n 's/.*"id"[^"]*"\([^"]*\)".*/\1/p' "$OUT/notary.json" | head -1)
-if ! grep -q '"status"[^"]*"Accepted"' "$OUT/notary.json"; then
-  cat "$OUT/notary.json"; echo
-  [[ -n "$ID" ]] && xcrun notarytool log "$ID" --keychain-profile notary
-  fail "notarization not accepted"
-fi
-echo "accepted ($ID)"
+step "Notarize the app (usually a few minutes)"
+ditto -c -k --keepParent "$APP" "$OUT/app.zip"
+notarize "$OUT/app.zip" app
+xcrun stapler staple -q "$APP"
+xcrun stapler validate -q "$APP"
 
-step "Staple and zip"
-xcrun stapler staple "$APP"
-xcrun stapler validate "$APP"
-spctl -a -vv -t exec "$APP" 2>&1 | tee "$OUT/spctl.txt"
-grep -q "Notarized Developer ID" "$OUT/spctl.txt" || fail "Gatekeeper does not accept the app"
-rm -f "$ZIP"
-ditto -c -k --keepParent "$APP" "$ZIP"
-echo "$ZIP ($(du -h "$ZIP" | cut -f1))"
+step "Build the DMG"
+STAGE="$OUT/dmg"
+mkdir -p "$STAGE"
+ditto "$APP" "$STAGE/$APP_NAME.app"
+ln -s /Applications "$STAGE/Applications"
+rm -f "$DMG"
+hdiutil create -quiet -volname "$APP_NAME" -srcfolder "$STAGE" -fs HFS+ -format UDZO -ov "$DMG"
+codesign --sign "Developer ID Application: " --timestamp "$DMG"   # matches the one Developer ID certificate by name
+codesign --verify --strict "$DMG"
+
+step "Notarize the DMG"
+notarize "$DMG" dmg
+xcrun stapler staple -q "$DMG"
+xcrun stapler validate -q "$DMG"
+GK=$(spctl -a -vv -t open --context context:primary-signature "$DMG" 2>&1); echo "$GK"
+grep -q "Notarized Developer ID" <<<"$GK" || fail "Gatekeeper does not accept the DMG"
+echo "$DMG ($(du -h "$DMG" | cut -f1))"
 
 if (( PUBLISH )); then
   step "Draft GitHub release $TAG"
-  gh release create "$TAG" "$ZIP" --draft --target "$(git rev-parse HEAD)" \
+  gh release create "$TAG" "$DMG" --draft --target "$(git rev-parse HEAD)" \
     --title "$APP_NAME $VERSION" \
-    --notes "Download **GOG-Disc-Archiver-$VERSION.zip**, unzip it and move **$APP_NAME** to your Applications folder. Requires macOS 14 or later."
+    --notes "Download **GOG-Disc-Archiver-$VERSION.dmg**, open it and drag **$APP_NAME** to Applications. Requires macOS 14 or later."
   echo "Draft created: add release notes and press Publish on GitHub."
 else
   echo

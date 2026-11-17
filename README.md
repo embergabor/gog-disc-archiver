@@ -22,7 +22,7 @@ Back up your GOG game installers to Blu-ray and DVD, verify every file, and prin
 
 ## Install
 
-Download the latest version from [Releases](../../releases), unzip it and move **GOG Disc Archiver** to your Applications folder.
+Download the `.dmg` from the latest [release](../../releases), open it and drag **GOG Disc Archiver** to Applications.
 
 ## How to use
 

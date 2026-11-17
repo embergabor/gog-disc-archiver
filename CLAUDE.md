@@ -60,5 +60,5 @@ xcodebuild -project GOGDiscArchiver.xcodeproj -scheme GOGDiscArchiver -configura
 
 ## Releases
 
-- `scripts/release.sh [--publish]` (steps in RELEASE.md) archives with the Developer ID certificate, notarizes (keychain profile `notary`), staples and zips to `dist/`. `--publish` also creates a **draft** GitHub release `v<MARKETING_VERSION>`; the user writes the notes and publishes it.
+- `scripts/release.sh [--publish]` (steps in RELEASE.md) archives with the Developer ID certificate, notarizes (keychain profile `notary`) and staples the app, then builds a signed, notarized, stapled DMG with an Applications shortcut in `dist/`. `--publish` also creates a **draft** GitHub release `v<MARKETING_VERSION>`; the user writes the notes and publishes it.
 - Publishing a release is outward-facing: run `--publish` only when the user asks for a release.
